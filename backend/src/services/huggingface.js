@@ -53,10 +53,16 @@ class HuggingFaceService {
           pdfUrl = `https://arxiv.org/pdf/${paperData.id}.pdf`;
         }
 
-        // Extract topics/keywords from AI keywords or other sources
-        const topics = [];
+        // Extract topics/keywords from AI keywords
+        // Priority: paper.ai_keywords > [] (empty array)
+        let topics = [];
+
+        // Check for ai_keywords in paper object
         if (paperData.ai_keywords && Array.isArray(paperData.ai_keywords)) {
-          topics.push(...paperData.ai_keywords);
+          topics = paperData.ai_keywords;
+          console.log(`  ✅ Found ${topics.length} AI keywords for paper: ${paperData.id}`);
+        } else {
+          console.log(`  ⚠️  No AI keywords found for paper: ${paperData.id}`);
         }
 
         return {
@@ -67,7 +73,7 @@ class HuggingFaceService {
           topics: topics,
           published_date: date,
           paper_id: paperData.id || null,
-          upvotes: item.upvotes || 0
+          upvotes: paperData.upvotes || item.upvotes || 0
         };
       });
 
