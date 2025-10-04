@@ -55,8 +55,8 @@ class HuggingFaceService {
 
         // Extract topics/keywords from AI keywords or other sources
         const topics = [];
-        if (item.ai_keywords && Array.isArray(item.ai_keywords)) {
-          topics.push(...item.ai_keywords);
+        if (paperData.ai_keywords && Array.isArray(paperData.ai_keywords)) {
+          topics.push(...paperData.ai_keywords);
         }
 
         return {
