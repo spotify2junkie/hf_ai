@@ -29,14 +29,47 @@ class HuggingFaceService {
         throw new Error('Invalid response format from HuggingFace API');
       }
 
-      const papers = response.data.map(paper => ({
-        title: paper.title || 'Untitled',
-        authors: Array.isArray(paper.authors) ? paper.authors : [],
-        abstract: paper.abstract || 'No abstract available',
-        pdf_url: paper.pdf_url || paper.url || null,
-        topics: Array.isArray(paper.topics) ? paper.topics : [],
-        published_date: date
-      }));
+      const papers = response.data.map(item => {
+        // Extract data from the actual HuggingFace API format
+        const paperData = item.paper || {};
+        const title = item.title || paperData.title || 'Untitled';
+        const summary = item.summary || paperData.summary || 'No abstract available';
+
+        // Extract author names from the complex author structure
+        const authors = [];
+        if (Array.isArray(paperData.authors)) {
+          paperData.authors.forEach(author => {
+            if (author.name) {
+              authors.push(author.name);
+            } else if (author.user && author.user.fullname) {
+              authors.push(author.user.fullname);
+            }
+          });
+        }
+
+        // Construct PDF URL from paper ID (arxiv format)
+        let pdfUrl = null;
+        if (paperData.id) {
+          pdfUrl = `https://arxiv.org/pdf/${paperData.id}.pdf`;
+        }
+
+        // Extract topics/keywords from AI keywords or other sources
+        const topics = [];
+        if (item.ai_keywords && Array.isArray(item.ai_keywords)) {
+          topics.push(...item.ai_keywords);
+        }
+
+        return {
+          title: title,
+          authors: authors,
+          abstract: summary,
+          pdf_url: pdfUrl,
+          topics: topics,
+          published_date: date,
+          paper_id: paperData.id || null,
+          upvotes: item.upvotes || 0
+        };
+      });
 
       console.log(`✅ Successfully fetched ${papers.length} papers`);
       return papers;
