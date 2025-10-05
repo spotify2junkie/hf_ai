@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import DatePicker from './components/DatePicker';
 import PapersTable from './components/PapersTable';
 import LoadingSpinner from './components/LoadingSpinner';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Paper, LoadingState } from './types';
 import PapersAPI from './services/api';
 import './App.css';
@@ -59,9 +60,10 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">
@@ -178,7 +180,8 @@ function App() {
           </p>
         </div>
       </footer>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 
