@@ -27,9 +27,32 @@ const aiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// CORS configuration - restrict to known origins
+const allowedOrigins = [
+  'http://localhost:3000',  // React frontend
+  'http://localhost:3002',  // Next.js frontend
+  process.env.FRONTEND_URL, // Production frontend URL from env
+].filter(Boolean); // Remove undefined values
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(morgan('combined'));
 app.use(express.json());
 
