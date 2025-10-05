@@ -9,7 +9,14 @@ const fetch = require('node-fetch');
 
 class DashScopeService {
   constructor() {
-    this.apiKey = process.env.DASHSCOPE_API_KEY || 'sk-8fc393f7a2a442ecbab2d7817d309061';
+    // CRITICAL: API key must be provided via environment variable
+    if (!process.env.DASHSCOPE_API_KEY) {
+      throw new Error(
+        'DASHSCOPE_API_KEY environment variable is required. ' +
+        'Please set it in your .env file or environment.'
+      );
+    }
+    this.apiKey = process.env.DASHSCOPE_API_KEY;
     this.baseURL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 
     // Analysis prompt template
