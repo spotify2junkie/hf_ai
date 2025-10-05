@@ -110,6 +110,16 @@ docker-compose.override.yml
 # Temporary files
 tmp/
 temp/
+backend/temp/
+*.pdf
+
+# Security sensitive files
+*.key
+*.pem
+*.crt
+*.cer
+credentials.json
+secrets.json
 
 # Subprojects and external repos
 awesome-claude-agents/
