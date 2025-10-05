@@ -207,19 +207,51 @@ Required environment variables (see `.env.example`):
 - Model: `qwen-long`
 - Analysis prompt is in Chinese and requests detailed paper explanation
 
+## Security Best Practices
+
+**CRITICAL - Environment Variables:**
+- `DASHSCOPE_API_KEY` is **REQUIRED** - application will throw error if not set
+- Never commit `.env` files or hardcode API keys in source code
+- Use `.env.example` as template and create local `.env` file
+
+**Rate Limiting:**
+- General API: 100 requests per 15 minutes per IP
+- AI Interpretation: 10 requests per hour per IP (resource intensive)
+- Rate limit headers returned in response (RateLimit-*)
+
+**CORS Security:**
+- Only allows requests from: localhost:3000, localhost:3002, and FRONTEND_URL env variable
+- All other origins are blocked with detailed logging
+- For production, set FRONTEND_URL in environment
+
+**Input Validation:**
+- All PDF URLs validated and must be from arxiv.org only
+- URL format validation using validator library
+- Input sanitization to prevent injection attacks
+- Paper titles and IDs are escaped before logging
+
+**Error Boundaries:**
+- React app wrapped in ErrorBoundary component (frontend/src/components/ErrorBoundary.tsx)
+- Prevents full app crash on component errors
+- Shows user-friendly error UI with retry options
+- Error details shown in development mode only
+
 ## Common Patterns
 
 **Error Handling:**
 - Date validation in backend/src/routes/papers.js:11-42
 - API error categorization (502 for external API, 503 for network)
 - SSE error propagation in AI interpretation
+- React ErrorBoundary catches component errors
 
 **Streaming:**
 - AI interpretation uses SSE for real-time updates
 - Heartbeat messages every 30 seconds to keep connection alive
 - Client disconnect cleanup in backend/src/routes/ai-interpretation.js:45-51
+- PDF downloads use streaming to file (not buffered in memory)
 
 **File Management:**
-- PDFs downloaded to temporary location
+- PDFs downloaded to temporary location using streams
 - Cleanup on completion or error
 - Cleanup on client disconnect
+- Automatic cleanup of files older than 1 hour
