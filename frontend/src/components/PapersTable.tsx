@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Paper } from '../types';
+import AIInterpretationModal from './AIInterpretationModal';
 
 interface PapersTableProps {
   papers: Paper[];
@@ -7,6 +8,8 @@ interface PapersTableProps {
 
 const PapersTable: React.FC<PapersTableProps> = ({ papers }) => {
   const [expandedPaper, setExpandedPaper] = useState<number | null>(null);
+  const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const toggleExpanded = (index: number) => {
     setExpandedPaper(expandedPaper === index ? null : index);
@@ -24,9 +27,21 @@ const PapersTable: React.FC<PapersTableProps> = ({ papers }) => {
     return `${authors.slice(0, 2).join(', ')} and ${authors.length - 2} others`;
   };
 
+  const handleAIInterpretation = (paper: Paper) => {
+    setSelectedPaper(paper);
+    setIsModalOpen(true);
+  };
+
   return (
-    <div className="overflow-hidden">
-      <div className="overflow-x-auto">
+    <>
+      <AIInterpretationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        paper={selectedPaper}
+      />
+
+      <div className="overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -120,12 +135,22 @@ const PapersTable: React.FC<PapersTableProps> = ({ papers }) => {
 
                   {/* Actions */}
                   <td className="px-6 py-4">
-                    <button
-                      onClick={() => toggleExpanded(index)}
-                      className="text-sm text-blue-600 hover:text-blue-900 font-medium"
-                    >
-                      {expandedPaper === index ? '▲ Less' : '▼ More'}
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => toggleExpanded(index)}
+                        className="text-sm text-blue-600 hover:text-blue-900 font-medium"
+                      >
+                        {expandedPaper === index ? '▲ Less' : '▼ More'}
+                      </button>
+                      <button
+                        onClick={() => handleAIInterpretation(paper)}
+                        disabled={!paper.pdf_url}
+                        className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        title={paper.pdf_url ? 'AI 解读' : 'No PDF available'}
+                      >
+                        🤖 AI 解读
+                      </button>
+                    </div>
                   </td>
                 </tr>
 
@@ -250,7 +275,7 @@ const PapersTable: React.FC<PapersTableProps> = ({ papers }) => {
           ))}
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

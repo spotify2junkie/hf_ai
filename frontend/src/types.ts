@@ -7,6 +7,7 @@ export interface Paper {
   pdf_url: string | null;
   topics: string[];
   published_date: string;
+  paper_id?: string | null;
 }
 
 export interface ApiResponse {
