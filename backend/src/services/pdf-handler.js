@@ -71,9 +71,25 @@ class PDFHandler {
         }
       }
 
-      // Write to file
-      const buffer = await response.buffer();
-      fs.writeFileSync(filepath, buffer);
+      // Stream to file instead of buffering in memory (better performance)
+      await new Promise((resolve, reject) => {
+        const fileStream = fs.createWriteStream(filepath);
+
+        response.body.pipe(fileStream);
+
+        response.body.on('error', (err) => {
+          fileStream.close();
+          reject(new Error(`Download stream error: ${err.message}`));
+        });
+
+        fileStream.on('error', (err) => {
+          reject(new Error(`File write error: ${err.message}`));
+        });
+
+        fileStream.on('finish', () => {
+          resolve();
+        });
+      });
 
       console.log(`✅ PDF downloaded successfully: ${filepath}`);
       return filepath;
