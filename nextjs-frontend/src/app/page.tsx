@@ -8,7 +8,7 @@ import { PaperCard } from '@/components/ui/PaperCard'
 import { PaperListSkeleton } from '@/components/ui/LoadingSkeleton'
 import { fetchPapersWithCache, validateDate } from '@/lib/api/papers'
 import { formatDateForApi, formatDateForDisplay } from '@/lib/utils'
-import { Paper, ApiResponse } from '@/types'
+import { Paper } from '@/types'
 
 export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
@@ -41,10 +41,10 @@ export default function Home() {
         throw new Error(validation.error)
       }
 
-      const response: ApiResponse = await fetchPapersWithCache(dateString)
+      const response = await fetchPapersWithCache(dateString)
 
       if (response.success) {
-        setPapers(response.data || [])
+        setPapers((response.data as Paper[]) || [])
       } else {
         throw new Error(response.error || 'Failed to fetch papers')
       }
@@ -65,6 +65,7 @@ export default function Home() {
   // Initial fetch on component mount
   useEffect(() => {
     fetchPapers(selectedDate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleRetry = () => {
@@ -237,7 +238,7 @@ export default function Home() {
                 No Search Results
               </h3>
               <p className="text-muted-foreground">
-                No papers match your search query "{searchQuery}".
+                No papers match your search query &ldquo;{searchQuery}&rdquo;.
                 Try different keywords or clear the search.
               </p>
               <button
@@ -259,7 +260,7 @@ export default function Home() {
             >
               {filteredPapers.map((paper, index) => (
                 <motion.div
-                  key={paper.id || index}
+                  key={paper.paper_id || index}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: index * 0.1 }}

@@ -228,6 +228,7 @@ const PapersTable: React.FC<PapersTableProps> = ({ papers }) => {
           </tbody>
         </table>
       </div>
+      </div>
 
       {/* Mobile-friendly card view for small screens */}
       <div className="sm:hidden">

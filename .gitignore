@@ -110,3 +110,6 @@ docker-compose.override.yml
 # Temporary files
 tmp/
 temp/
+
+# Subprojects and external repos
+awesome-claude-agents/

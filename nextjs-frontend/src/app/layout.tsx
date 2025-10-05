@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 
 // Modern font configuration
@@ -80,9 +81,9 @@ export default function RootLayout({
                 </div>
 
                 <nav className="hidden md:flex items-center space-x-6">
-                  <a href="/" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+                  <Link href="/" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
                     Home
-                  </a>
+                  </Link>
                   <a href="/about" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
                     About
                   </a>

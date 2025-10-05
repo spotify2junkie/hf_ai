@@ -1,9 +1,15 @@
-import { Paper, ApiResponse } from '@/types';
+import { ApiResponse } from '@/types';
 
 // API configuration - use Next.js API routes for better server-side handling
-const API_BASE_URL = process.env.NODE_ENV === 'development'
-  ? 'http://localhost:3002'
-  : window?.location?.origin || '';
+const getApiBaseUrl = () => {
+  if (typeof window === 'undefined') {
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
+  }
+  return process.env.NODE_ENV === 'development'
+    ? 'http://localhost:3002'
+    : window.location.origin;
+};
+
 const API_TIMEOUT = 15000; // 15 seconds
 
 interface FetchOptions {
@@ -55,7 +61,7 @@ async function fetchWithTimeout(url: string, options: FetchOptions = {}): Promis
  */
 export async function fetchPapers(date: string): Promise<ApiResponse> {
   try {
-    const url = `${API_BASE_URL}/api/papers?date=${encodeURIComponent(date)}`;
+    const url = `${getApiBaseUrl()}/api/papers?date=${encodeURIComponent(date)}`;
     const response = await fetchWithTimeout(url, { method: 'GET' });
     const data: ApiResponse = await response.json();
 
@@ -81,7 +87,7 @@ export async function fetchPapers(date: string): Promise<ApiResponse> {
  */
 export async function checkHealth(): Promise<boolean> {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/health`, {
+    const response = await fetchWithTimeout(`${getApiBaseUrl()}/health`, {
       method: 'GET',
       timeout: 5000, // Shorter timeout for health check
     });
@@ -114,7 +120,7 @@ export async function fetchPapersWithCache(date: string): Promise<ApiResponse> {
         console.log(`📋 Using cached data for ${date}`);
         return parsed.data;
       }
-    } catch (error) {
+    } catch {
       // Invalid cache data, remove it
       localStorage.removeItem(cacheKey);
     }

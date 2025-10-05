@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { DayPicker } from 'react-day-picker'
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, ChevronRight } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 
@@ -86,10 +86,6 @@ export function DatePicker({ selectedDate, onDateChange, className }: DatePicker
                 day_disabled: "text-muted-foreground opacity-50 cursor-not-allowed",
                 day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
                 day_hidden: "invisible",
-              }}
-              components={{
-                IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
-                IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
               }}
             />
           </div>

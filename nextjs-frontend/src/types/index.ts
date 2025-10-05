@@ -15,12 +15,12 @@ export type Theme = 'light' | 'dark' | 'system';
 export interface NavItem {
   label: string;
   href: string;
-  icon?: React.ComponentType<any>;
+  icon?: React.ComponentType<{ className?: string }>;
   isActive?: boolean;
 }
 
 // Form types
-export interface FormState<T = any> {
+export interface FormState<T = Record<string, unknown>> {
   data: T;
   errors: Record<string, string>;
   isSubmitting: boolean;
@@ -31,12 +31,12 @@ export interface FormState<T = any> {
 export interface ApiRequestConfig {
   url: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  data?: any;
+  data?: unknown;
   headers?: Record<string, string>;
   timeout?: number;
 }
 
-export interface ApiSuccessResponse<T = any> {
+export interface ApiSuccessResponse<T = unknown> {
   success: true;
   data: T;
   message?: string;
@@ -49,7 +49,7 @@ export interface ApiErrorResponse {
   statusCode?: number;
 }
 
-export type ApiResponse<T = any> = ApiSuccessResponse<T> | ApiErrorResponse;
+export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 // Utility types
 export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
@@ -67,10 +67,10 @@ export type Variant = 'primary' | 'secondary' | 'success' | 'warning' | 'error';
 export type LoadingStatus = 'idle' | 'loading' | 'success' | 'error';
 
 // Search and filter types
-export interface SearchState {
+export interface SearchState<T = unknown> {
   query: string;
   isSearching: boolean;
-  results: any[];
+  results: T[];
   totalResults: number;
 }
 
