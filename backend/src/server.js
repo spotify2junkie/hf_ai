@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const papersRouter = require('./routes/papers');
+const aiInterpretationRouter = require('./routes/ai-interpretation');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +16,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/papers', papersRouter);
+app.use('/api/ai-interpretation', aiInterpretationRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
