@@ -1,4 +1,5 @@
 const express = require('express');
+const validator = require('validator');
 const pdfHandler = require('../services/pdf-handler');
 const dashscopeService = require('../services/dashscope');
 
@@ -15,7 +16,7 @@ router.post('/', async (req, res) => {
   let pdfPath = null;
 
   try {
-    // Validate input
+    // Validate and sanitize input
     if (!pdf_url) {
       return res.status(400).json({
         error: 'pdf_url is required',
@@ -23,9 +24,30 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validate URL format
+    if (!validator.isURL(pdf_url, { protocols: ['http', 'https'], require_protocol: true })) {
+      return res.status(400).json({
+        error: 'Invalid PDF URL format',
+        provided: pdf_url
+      });
+    }
+
+    // Only allow arxiv.org PDFs for security
+    const url = new URL(pdf_url);
+    if (!url.hostname.endsWith('arxiv.org')) {
+      return res.status(400).json({
+        error: 'Only arxiv.org PDFs are allowed',
+        provided: url.hostname
+      });
+    }
+
+    // Sanitize paper_title if provided (prevent injection)
+    const sanitizedTitle = paper_title ? validator.escape(paper_title.trim()) : 'Unknown';
+    const sanitizedPaperId = paper_id ? validator.escape(paper_id.trim()) : 'Unknown';
+
     console.log(`\n🚀 Starting AI interpretation for paper:`);
-    console.log(`   Title: ${paper_title || 'Unknown'}`);
-    console.log(`   ID: ${paper_id || 'Unknown'}`);
+    console.log(`   Title: ${sanitizedTitle}`);
+    console.log(`   ID: ${sanitizedPaperId}`);
     console.log(`   URL: ${pdf_url}`);
 
     // Set up Server-Sent Events
