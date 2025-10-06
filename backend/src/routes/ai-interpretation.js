@@ -34,10 +34,20 @@ router.post('/', async (req, res) => {
 
     // Only allow arxiv.org PDFs for security
     const url = new URL(pdf_url);
-    if (!url.hostname.endsWith('arxiv.org')) {
+    const allowedHosts = ['arxiv.org', 'www.arxiv.org', 'export.arxiv.org'];
+    if (!allowedHosts.includes(url.hostname.toLowerCase())) {
       return res.status(400).json({
         error: 'Only arxiv.org PDFs are allowed',
-        provided: url.hostname
+        provided: url.hostname,
+        allowed: allowedHosts
+      });
+    }
+
+    // Additional validation: must be a PDF file
+    if (!url.pathname.toLowerCase().endsWith('.pdf')) {
+      return res.status(400).json({
+        error: 'URL must point to a PDF file',
+        provided: url.pathname
       });
     }
 

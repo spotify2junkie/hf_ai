@@ -38,9 +38,22 @@ class PDFHandler {
         throw new Error('Invalid PDF URL');
       }
 
-      // Validate it's an arxiv URL for security
-      if (!pdfUrl.includes('arxiv.org')) {
-        throw new Error('Only arxiv.org PDFs are supported');
+      // Validate it's an arxiv URL for security (strict hostname check)
+      let url;
+      try {
+        url = new URL(pdfUrl);
+      } catch (e) {
+        throw new Error('Invalid PDF URL');
+      }
+
+      const allowedHosts = ['arxiv.org', 'www.arxiv.org', 'export.arxiv.org'];
+      if (!allowedHosts.includes(url.hostname.toLowerCase())) {
+        throw new Error(`Only arxiv.org PDFs are supported. Got: ${url.hostname}`);
+      }
+
+      // Must be a PDF file
+      if (!url.pathname.toLowerCase().endsWith('.pdf')) {
+        throw new Error('URL must point to a PDF file');
       }
 
       // Generate unique filename
