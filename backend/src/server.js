@@ -53,7 +53,19 @@ const corsOptions = {
 // Middleware
 app.use(helmet());
 app.use(cors(corsOptions));
-app.use(morgan('combined'));
+
+// Morgan logging - exclude Authorization header to prevent API key leakage
+morgan.token('sanitized-headers', (req) => {
+  const sanitized = { ...req.headers };
+  if (sanitized.authorization) {
+    sanitized.authorization = '[REDACTED]';
+  }
+  return JSON.stringify(sanitized);
+});
+
+// Use custom morgan format that doesn't log sensitive headers
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
+
 app.use(express.json());
 
 // Apply rate limiting to all routes
