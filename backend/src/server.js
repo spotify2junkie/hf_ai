@@ -10,21 +10,27 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Rate limiting configuration
+// NOTE: Using in-memory store. For production with multiple instances,
+// consider using Redis store: https://github.com/express-rate-limit/rate-limit-redis
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Skip rate limiting for health check endpoint
+  skip: (req) => req.path === '/health' || req.path === '/api/papers/health' || req.path === '/api/ai-interpretation/health',
 });
 
 // Stricter rate limit for AI interpretation (resource intensive)
+// Applied INSTEAD of general limiter (not in addition to)
 const aiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // Limit each IP to 10 AI requests per hour
   message: 'AI interpretation rate limit exceeded. Please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: false, // Count all requests, even failed ones
 });
 
 // CORS configuration - restrict to known origins
@@ -68,12 +74,14 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms'))
 
 app.use(express.json());
 
-// Apply rate limiting to all routes
+// Routes - AI route registered BEFORE global limiter to use only aiLimiter
+app.use('/api/ai-interpretation', aiLimiter, aiInterpretationRouter);
+
+// Apply general rate limiting to remaining routes
 app.use(limiter);
 
-// Routes
+// Other routes (protected by general limiter)
 app.use('/api/papers', papersRouter);
-app.use('/api/ai-interpretation', aiLimiter, aiInterpretationRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
