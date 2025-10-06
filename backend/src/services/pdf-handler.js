@@ -85,17 +85,42 @@ class PDFHandler {
       }
 
       // Stream to file instead of buffering in memory (better performance)
+      // Track actual bytes written to enforce size limit even without content-length header
+      const maxBytes = 100 * 1024 * 1024; // 100MB
+      let bytesWritten = 0;
+
       await new Promise((resolve, reject) => {
         const fileStream = fs.createWriteStream(filepath);
+        let cleanedUp = false;
+
+        const cleanup = () => {
+          if (!cleanedUp) {
+            cleanedUp = true;
+            fileStream.close();
+            // Delete partially downloaded file
+            if (fs.existsSync(filepath)) {
+              fs.unlinkSync(filepath);
+            }
+          }
+        };
+
+        response.body.on('data', (chunk) => {
+          bytesWritten += chunk.length;
+          if (bytesWritten > maxBytes) {
+            cleanup();
+            reject(new Error(`PDF file too large (exceeded ${maxBytes / (1024 * 1024)}MB limit)`));
+          }
+        });
 
         response.body.pipe(fileStream);
 
         response.body.on('error', (err) => {
-          fileStream.close();
+          cleanup();
           reject(new Error(`Download stream error: ${err.message}`));
         });
 
         fileStream.on('error', (err) => {
+          cleanup();
           reject(new Error(`File write error: ${err.message}`));
         });
 
