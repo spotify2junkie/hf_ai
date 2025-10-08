@@ -50,6 +50,7 @@ const aiLimiter = rateLimit({
 // CORS configuration - restrict to known origins
 const allowedOrigins = [
   'http://localhost:3000',  // React frontend
+  'http://localhost:3001',  // Backend (for SSE and internal requests)
   'http://localhost:3002',  // Next.js frontend
   process.env.FRONTEND_URL, // Production frontend URL from env
 ].filter(Boolean); // Remove undefined values
