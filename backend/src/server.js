@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,6 +9,10 @@ const aiInterpretationRouter = require('./routes/ai-interpretation');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Trust proxy - required for containerized/proxied environments
+// Trust 1 proxy hop (immediate proxy/container network)
+app.set('trust proxy', 1);
 
 // Rate limiting configuration
 // NOTE: Using in-memory store. For production with multiple instances,
@@ -93,6 +98,11 @@ app.use('/api/papers', papersRouter);
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Suppress browser-generated static file requests (served by frontend)
+app.get(['/manifest.json', '/favicon.ico', '/logo192.png', '/robots.txt'], (req, res) => {
+  res.status(204).end(); // No Content - prevents 404 log spam
 });
 
 // 404 handler
