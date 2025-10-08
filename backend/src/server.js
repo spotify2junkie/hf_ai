@@ -7,6 +7,15 @@ const rateLimit = require('express-rate-limit');
 const papersRouter = require('./routes/papers');
 const aiInterpretationRouter = require('./routes/ai-interpretation');
 
+// Validate critical environment variables on startup
+if (!process.env.DASHSCOPE_API_KEY) {
+  console.error('❌ DASHSCOPE_API_KEY environment variable is required');
+  console.error('   Please set it in your .env file or environment');
+  console.error('   Get your API key from: https://dashscope.aliyun.com/');
+  console.error('   AI interpretation features will not work without it.');
+  console.warn('⚠️  Server starting anyway, but AI features will fail');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
