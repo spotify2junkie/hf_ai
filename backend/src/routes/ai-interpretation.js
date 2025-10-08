@@ -2,6 +2,7 @@ const express = require('express');
 const validator = require('validator');
 const pdfHandler = require('../services/pdf-handler');
 const dashscopeService = require('../services/dashscope');
+const cache = require('../services/cache');
 
 const router = express.Router();
 
@@ -60,6 +61,38 @@ router.post('/', async (req, res) => {
     console.log(`   ID: ${sanitizedPaperId}`);
     console.log(`   URL: ${pdf_url}`);
 
+    // Check cache first (only if paper_id is provided)
+    if (sanitizedPaperId && sanitizedPaperId !== 'Unknown') {
+      const cachedAnalysis = await cache.get(sanitizedPaperId);
+      if (cachedAnalysis) {
+        console.log(`📦 Using cached analysis for paper ${sanitizedPaperId}`);
+
+        // Set up Server-Sent Events for cached response
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no'
+        });
+
+        // Send cached status
+        res.write(`data: ${JSON.stringify({ status: 'cached', message: 'Using cached analysis' })}\n\n`);
+
+        // Send cached content (simulate streaming for consistent UX)
+        const chunkSize = 100;
+        for (let i = 0; i < cachedAnalysis.length; i += chunkSize) {
+          const chunk = cachedAnalysis.slice(i, i + chunkSize);
+          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+          // Small delay to simulate streaming
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+
+        res.write(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
+        res.end();
+        return;
+      }
+    }
+
     // Set up Server-Sent Events
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -92,7 +125,36 @@ router.post('/', async (req, res) => {
 
     // Step 3: Stream analysis
     res.write(`data: ${JSON.stringify({ status: 'analyzing' })}\n\n`);
+
+    // Capture analysis content for caching
+    let analysisContent = '';
+    const originalWrite = res.write.bind(res);
+    res.write = function(chunk) {
+      // Capture content chunks for caching
+      try {
+        const str = chunk.toString();
+        if (str.startsWith('data: ')) {
+          const data = JSON.parse(str.slice(6));
+          if (data.chunk) {
+            analysisContent += data.chunk;
+          }
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+      return originalWrite(chunk);
+    };
+
     await dashscopeService.streamAnalysis(fileId, res);
+
+    // Restore original write function
+    res.write = originalWrite;
+
+    // Cache the analysis if we have paper_id and content
+    if (sanitizedPaperId && sanitizedPaperId !== 'Unknown' && analysisContent) {
+      console.log(`💾 Caching analysis for paper ${sanitizedPaperId} (${analysisContent.length} chars)`);
+      await cache.set(sanitizedPaperId, analysisContent);
+    }
 
     // Cleanup
     clearInterval(heartbeat);

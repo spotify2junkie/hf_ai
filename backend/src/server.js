@@ -141,6 +141,21 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Backend server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
+
+  // Schedule cleanup of old temp files and cache every hour
+  const pdfHandler = require('./services/pdf-handler');
+  const cache = require('./services/cache');
+
+  console.log('🧹 Scheduling temp file and cache cleanup (runs every hour)');
+  setInterval(() => {
+    console.log('🧹 Running scheduled cleanup...');
+    pdfHandler.cleanupOldFiles();
+    cache.clearOld(48 * 60 * 60 * 1000); // Clear cache older than 48 hours
+  }, 60 * 60 * 1000); // Every hour
+
+  // Run initial cleanup on startup
+  pdfHandler.cleanupOldFiles();
+  cache.clearOld(48 * 60 * 60 * 1000);
 });
 
 module.exports = app;
