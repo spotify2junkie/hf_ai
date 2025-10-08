@@ -88,96 +88,142 @@ class DashScopeService {
    * Stream analysis from DashScope
    * @param {string} fileId - File ID from DashScope
    * @param {object} res - Express response object for SSE
+   * @param {number} timeout - Max time to wait in milliseconds (default: 15 seconds)
    */
-  async streamAnalysis(fileId, res) {
-    try {
-      console.log(`🤖 Starting AI analysis for file: ${fileId}`);
+  async streamAnalysis(fileId, res, timeout = 15000) {
+    return new Promise(async (resolve, reject) => {
+      let timeoutId = null;
+      let isTimedOut = false;
 
-      const response = await fetch(`${this.baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'qwen-long',
-          messages: [
-            { role: 'system', content: 'You are a helpful assistant.' },
-            { role: 'system', content: `fileid://${fileId}` },
-            { role: 'user', content: this.analysisPrompt }
-          ],
-          stream: true,
-          stream_options: {
-            include_usage: true
-          }
-        })
-      });
+      try {
+        console.log(`🤖 Starting AI analysis for file: ${fileId} (timeout: ${timeout/1000}s)`);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
-      }
-
-      console.log(`📡 Streaming response from DashScope...`);
-
-      // Stream the response
-      const reader = response.body;
-      let buffer = '';
-
-      reader.on('data', (chunk) => {
-        const text = chunk.toString();
-        buffer += text;
-
-        // Split by double newline (SSE format)
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || ''; // Keep incomplete chunk in buffer
-
-        lines.forEach(line => {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6); // Remove 'data: ' prefix
-
-            // Skip [DONE] message
-            if (data === '[DONE]') {
-              return;
+        const response = await fetch(`${this.baseURL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'qwen-long',
+            messages: [
+              { role: 'system', content: 'You are a helpful assistant.' },
+              { role: 'system', content: `fileid://${fileId}` },
+              { role: 'user', content: this.analysisPrompt }
+            ],
+            stream: true,
+            stream_options: {
+              include_usage: true
             }
-
-            try {
-              const parsed = JSON.parse(data);
-
-              // Extract content from the response
-              if (parsed.choices && parsed.choices[0]?.delta?.content) {
-                const content = parsed.choices[0].delta.content;
-
-                // Send chunk to client
-                res.write(`data: ${JSON.stringify({ chunk: content })}\n\n`);
-              }
-
-              // Check for finish_reason
-              if (parsed.choices && parsed.choices[0]?.finish_reason) {
-                console.log(`✅ Analysis complete. Reason: ${parsed.choices[0].finish_reason}`);
-              }
-
-            } catch (parseError) {
-              // Ignore JSON parse errors for non-JSON lines
-            }
-          }
+          })
         });
-      });
 
-      reader.on('end', () => {
-        console.log(`🏁 Stream ended`);
-        res.write(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
-      });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
+        }
 
-      reader.on('error', (error) => {
-        console.error('❌ Stream error:', error);
-        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-      });
+        console.log(`📡 Streaming response from DashScope...`);
 
-    } catch (error) {
-      console.error('❌ DashScope analysis error:', error.message);
-      throw new Error(`Failed to analyze paper: ${error.message}`);
-    }
+        // Set timeout to return partial results
+        timeoutId = setTimeout(() => {
+          isTimedOut = true;
+          console.log(`⏱️  Timeout reached (${timeout/1000}s) - returning partial results`);
+          try {
+            res.write(`data: ${JSON.stringify({ status: 'timeout', message: 'Partial results (timeout reached)' })}\n\n`);
+          } catch (e) {
+            // Ignore if response already closed
+          }
+          reader.destroy(); // Stop reading stream
+          resolve();
+        }, timeout);
+
+        // Stream the response
+        const reader = response.body;
+        let buffer = '';
+
+        reader.on('data', (chunk) => {
+          if (isTimedOut) return;
+
+          const text = chunk.toString();
+          buffer += text;
+
+          // Split by double newline (SSE format)
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || ''; // Keep incomplete chunk in buffer
+
+          lines.forEach(line => {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6); // Remove 'data: ' prefix
+
+              // Skip [DONE] message
+              if (data === '[DONE]') {
+                return;
+              }
+
+              try {
+                const parsed = JSON.parse(data);
+
+                // Extract content from the response
+                if (parsed.choices && parsed.choices[0]?.delta?.content) {
+                  const content = parsed.choices[0].delta.content;
+
+                  // Send chunk to client
+                  try {
+                    res.write(`data: ${JSON.stringify({ chunk: content })}\n\n`);
+                  } catch (e) {
+                    console.error('⚠️  Failed to write to response stream:', e.message);
+                  }
+                }
+
+                // Check for finish_reason
+                if (parsed.choices && parsed.choices[0]?.finish_reason) {
+                  console.log(`✅ Analysis complete. Reason: ${parsed.choices[0].finish_reason}`);
+                }
+
+              } catch (parseError) {
+                // Ignore JSON parse errors for non-JSON lines
+              }
+            }
+          });
+        });
+
+        reader.on('end', () => {
+          if (isTimedOut) return;
+
+          clearTimeout(timeoutId);
+          console.log(`🏁 Stream ended naturally`);
+
+          try {
+            res.write(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
+          } catch (e) {
+            console.error('⚠️  Failed to write completion status:', e.message);
+          }
+
+          resolve();
+        });
+
+        reader.on('error', (error) => {
+          if (isTimedOut) return;
+
+          clearTimeout(timeoutId);
+          console.error('❌ Stream error:', error);
+
+          try {
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+          } catch (e) {
+            // Ignore if response already closed
+          }
+
+          reject(error);
+        });
+
+      } catch (error) {
+        if (timeoutId) clearTimeout(timeoutId);
+        console.error('❌ DashScope analysis error:', error.message);
+        reject(new Error(`Failed to analyze paper: ${error.message}`));
+      }
+    });
   }
 }
 
