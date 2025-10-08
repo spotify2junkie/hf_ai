@@ -105,6 +105,15 @@ app.get(['/manifest.json', '/favicon.ico', '/logo192.png', '/robots.txt'], (req,
   res.status(204).end(); // No Content - prevents 404 log spam
 });
 
+// Suppress webpack HMR (Hot Module Replacement) requests in development
+app.get('*.hot-update.json', (req, res) => {
+  res.status(204).end();
+});
+
+app.get('*.hot-update.js', (req, res) => {
+  res.status(204).end();
+});
+
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
