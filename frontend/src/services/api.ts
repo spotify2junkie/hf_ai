@@ -2,8 +2,10 @@ import axios from 'axios';
 import { ApiResponse, ApiError } from '../types';
 
 // Create axios instance with base configuration
+// When REACT_APP_API_URL is not set or empty, use relative URLs (via proxy)
+// In production, set REACT_APP_API_URL to your backend URL
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001',
+  baseURL: process.env.REACT_APP_API_URL || '',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
