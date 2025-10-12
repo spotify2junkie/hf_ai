@@ -94,6 +94,22 @@ class DashScopeService {
     return new Promise(async (resolve, reject) => {
       let timeoutId = null;
       let isTimedOut = false;
+      let streamEnded = false;
+      const abortController = new AbortController();
+
+      // Helper to safely write to response
+      const safeWrite = (data) => {
+        if (!res.finished && res.writable && !streamEnded) {
+          try {
+            res.write(data);
+            return true;
+          } catch (e) {
+            console.error('⚠️  Failed to write to response:', e.message);
+            return false;
+          }
+        }
+        return false;
+      };
 
       try {
         console.log(`🤖 Starting AI analysis for file: ${fileId} (timeout: ${timeout/1000}s)`);
@@ -104,6 +120,7 @@ class DashScopeService {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json'
           },
+          signal: abortController.signal,
           body: JSON.stringify({
             model: 'qwen-long',
             messages: [
@@ -127,14 +144,21 @@ class DashScopeService {
 
         // Set timeout to return partial results
         timeoutId = setTimeout(() => {
+          if (streamEnded) return; // Don't timeout if already ended
+
           isTimedOut = true;
+          streamEnded = true;
           console.log(`⏱️  Timeout reached (${timeout/1000}s) - returning partial results`);
+
+          safeWrite(`data: ${JSON.stringify({ status: 'timeout', message: 'Partial results (timeout reached)' })}\n\n`);
+
+          // Abort the fetch request
           try {
-            res.write(`data: ${JSON.stringify({ status: 'timeout', message: 'Partial results (timeout reached)' })}\n\n`);
+            abortController.abort();
           } catch (e) {
-            // Ignore if response already closed
+            console.error('⚠️  Error aborting stream:', e.message);
           }
-          reader.destroy(); // Stop reading stream
+
           resolve();
         }, timeout);
 
@@ -143,7 +167,7 @@ class DashScopeService {
         let buffer = '';
 
         reader.on('data', (chunk) => {
-          if (isTimedOut) return;
+          if (isTimedOut || streamEnded) return;
 
           const text = chunk.toString();
           buffer += text;
@@ -167,13 +191,8 @@ class DashScopeService {
                 // Extract content from the response
                 if (parsed.choices && parsed.choices[0]?.delta?.content) {
                   const content = parsed.choices[0].delta.content;
-
-                  // Send chunk to client
-                  try {
-                    res.write(`data: ${JSON.stringify({ chunk: content })}\n\n`);
-                  } catch (e) {
-                    console.error('⚠️  Failed to write to response stream:', e.message);
-                  }
+                  // Use safe write helper
+                  safeWrite(`data: ${JSON.stringify({ chunk: content })}\n\n`);
                 }
 
                 // Check for finish_reason
@@ -189,32 +208,24 @@ class DashScopeService {
         });
 
         reader.on('end', () => {
-          if (isTimedOut) return;
+          if (isTimedOut || streamEnded) return;
 
+          streamEnded = true;
           clearTimeout(timeoutId);
           console.log(`🏁 Stream ended naturally`);
 
-          try {
-            res.write(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
-          } catch (e) {
-            console.error('⚠️  Failed to write completion status:', e.message);
-          }
-
+          safeWrite(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
           resolve();
         });
 
         reader.on('error', (error) => {
-          if (isTimedOut) return;
+          if (streamEnded) return;
 
+          streamEnded = true;
           clearTimeout(timeoutId);
           console.error('❌ Stream error:', error);
 
-          try {
-            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-          } catch (e) {
-            // Ignore if response already closed
-          }
-
+          safeWrite(`data: ${JSON.stringify({ error: error.message })}\n\n`);
           reject(error);
         });
 

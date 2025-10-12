@@ -115,52 +115,57 @@ router.post('/', async (req, res) => {
       console.log('🔌 Client disconnected');
     });
 
-    // Step 1: Download PDF
-    res.write(`data: ${JSON.stringify({ status: 'downloading' })}\n\n`);
-    pdfPath = await pdfHandler.downloadPDF(pdf_url);
+    try {
+      // Step 1: Download PDF
+      res.write(`data: ${JSON.stringify({ status: 'downloading' })}\n\n`);
+      pdfPath = await pdfHandler.downloadPDF(pdf_url);
 
-    // Step 2: Upload to DashScope
-    res.write(`data: ${JSON.stringify({ status: 'uploading' })}\n\n`);
-    const fileId = await dashscopeService.uploadPDF(pdfPath);
+      // Step 2: Upload to DashScope
+      res.write(`data: ${JSON.stringify({ status: 'uploading' })}\n\n`);
+      const fileId = await dashscopeService.uploadPDF(pdfPath);
 
-    // Step 3: Stream analysis
-    res.write(`data: ${JSON.stringify({ status: 'analyzing' })}\n\n`);
+      // Step 3: Stream analysis
+      res.write(`data: ${JSON.stringify({ status: 'analyzing' })}\n\n`);
 
-    // Capture analysis content for caching
-    let analysisContent = '';
-    const originalWrite = res.write.bind(res);
-    res.write = function(chunk) {
-      // Capture content chunks for caching
-      try {
-        const str = chunk.toString();
-        if (str.startsWith('data: ')) {
-          const data = JSON.parse(str.slice(6));
-          if (data.chunk) {
-            analysisContent += data.chunk;
+      // Capture analysis content for caching
+      let analysisContent = '';
+      const originalWrite = res.write.bind(res);
+      res.write = function(chunk) {
+        // Capture content chunks for caching
+        try {
+          const str = chunk.toString();
+          if (str.startsWith('data: ')) {
+            const data = JSON.parse(str.slice(6));
+            if (data.chunk) {
+              analysisContent += data.chunk;
+            }
           }
+        } catch (e) {
+          // Ignore parse errors
         }
-      } catch (e) {
-        // Ignore parse errors
+        return originalWrite(chunk);
+      };
+
+      await dashscopeService.streamAnalysis(fileId, res);
+
+      // Restore original write function
+      res.write = originalWrite;
+
+      // Cache the analysis if we have paper_id and content
+      if (sanitizedPaperId && sanitizedPaperId !== 'Unknown' && analysisContent) {
+        console.log(`💾 Caching analysis for paper ${sanitizedPaperId} (${analysisContent.length} chars)`);
+        await cache.set(sanitizedPaperId, analysisContent);
       }
-      return originalWrite(chunk);
-    };
 
-    await dashscopeService.streamAnalysis(fileId, res);
+      res.end();
 
-    // Restore original write function
-    res.write = originalWrite;
-
-    // Cache the analysis if we have paper_id and content
-    if (sanitizedPaperId && sanitizedPaperId !== 'Unknown' && analysisContent) {
-      console.log(`💾 Caching analysis for paper ${sanitizedPaperId} (${analysisContent.length} chars)`);
-      await cache.set(sanitizedPaperId, analysisContent);
+    } finally {
+      // Always cleanup resources, even on error
+      clearInterval(heartbeat);
+      if (pdfPath) {
+        pdfHandler.cleanupFile(pdfPath);
+      }
     }
-
-    // Cleanup
-    clearInterval(heartbeat);
-    pdfHandler.cleanupFile(pdfPath);
-
-    res.end();
 
   } catch (error) {
     console.error('❌ AI interpretation error:', error);

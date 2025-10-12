@@ -1,4 +1,5 @@
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 
@@ -10,7 +11,39 @@ const crypto = require('crypto');
 class CacheService {
   constructor() {
     this.cacheDir = path.join(__dirname, '../../cache');
+    this.locks = new Map(); // In-memory locks for preventing race conditions
     this.ensureCacheDir();
+  }
+
+  /**
+   * Acquire lock for a paper ID
+   * @param {string} key - Lock key
+   * @returns {Promise<void>}
+   */
+  async acquireLock(key) {
+    const maxWait = 30000; // 30 seconds max wait
+    const startTime = Date.now();
+
+    while (this.locks.has(key)) {
+      if (Date.now() - startTime > maxWait) {
+        throw new Error(`Lock timeout for ${key}`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    this.locks.set(key, { acquired: Date.now() });
+    console.log(`🔒 Lock acquired for ${key}`);
+  }
+
+  /**
+   * Release lock for a paper ID
+   * @param {string} key - Lock key
+   */
+  releaseLock(key) {
+    if (this.locks.has(key)) {
+      this.locks.delete(key);
+      console.log(`🔓 Lock released for ${key}`);
+    }
   }
 
   /**
@@ -45,23 +78,27 @@ class CacheService {
       const cacheKey = this.getCacheKey(paperId);
       const cachePath = path.join(this.cacheDir, cacheKey);
 
-      if (!fs.existsSync(cachePath)) {
-        return null;
+      // Check if file exists (async)
+      try {
+        await fsPromises.access(cachePath);
+      } catch {
+        return null; // File doesn't exist
       }
 
-      // Check cache age
-      const stats = fs.statSync(cachePath);
+      // Check cache age (async)
+      const stats = await fsPromises.stat(cachePath);
       const age = Date.now() - stats.mtimeMs;
 
       if (age > maxAge) {
         console.log(`⏰ Cache expired for ${paperId} (age: ${(age / 1000 / 60 / 60).toFixed(1)}h)`);
-        // Delete expired cache
-        fs.unlinkSync(cachePath);
+        // Delete expired cache (async)
+        await fsPromises.unlink(cachePath).catch(() => {});
         return null;
       }
 
-      // Read and return cached analysis
-      const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      // Read and return cached analysis (async)
+      const content = await fsPromises.readFile(cachePath, 'utf8');
+      const cached = JSON.parse(content);
       console.log(`✅ Cache hit for ${paperId} (age: ${(age / 1000 / 60 / 60).toFixed(1)}h)`);
 
       return cached.analysis;
@@ -73,13 +110,18 @@ class CacheService {
   }
 
   /**
-   * Store analysis in cache
+   * Store analysis in cache with locking
    * @param {string} paperId - Paper identifier
    * @param {string} analysis - Analysis content
    * @returns {Promise<void>}
    */
   async set(paperId, analysis) {
+    const lockKey = `write_${paperId}`;
+
     try {
+      // Acquire lock to prevent concurrent writes
+      await this.acquireLock(lockKey);
+
       const cacheKey = this.getCacheKey(paperId);
       const cachePath = path.join(this.cacheDir, cacheKey);
 
@@ -90,12 +132,15 @@ class CacheService {
         cached_at: Date.now()
       };
 
-      fs.writeFileSync(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
-      console.log(`💾 Cached analysis for ${paperId}`);
+      // Write file asynchronously (non-blocking)
+      await fsPromises.writeFile(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
+      console.log(`💾 Cached analysis for ${paperId} (${analysis.length} chars)`);
 
     } catch (error) {
       console.error('⚠️  Cache write error:', error.message);
       // Don't throw - caching is optional
+    } finally {
+      this.releaseLock(lockKey);
     }
   }
 
