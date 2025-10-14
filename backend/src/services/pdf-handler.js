@@ -60,12 +60,16 @@ class PDFHandler {
       const filename = `paper_${uuidv4()}.pdf`;
       const filepath = path.join(this.tempDir, filename);
 
-      // Download PDF with proper timeout
+      // Download PDF with proper timeout and optimization
       const response = await fetch(pdfUrl, {
         timeout: 30000, // 30 second connection timeout
         headers: {
-          'User-Agent': 'Daily-Paper-Extractor/1.0'
-        }
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/pdf,*/*',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive'
+        },
+        compress: true // Enable gzip compression
       });
 
       if (!response.ok) {
@@ -90,7 +94,10 @@ class PDFHandler {
       let bytesWritten = 0;
 
       await new Promise((resolve, reject) => {
-        const fileStream = fs.createWriteStream(filepath);
+        // Use larger buffer for faster writes (1MB instead of default 16KB)
+        const fileStream = fs.createWriteStream(filepath, {
+          highWaterMark: 1024 * 1024 // 1MB buffer
+        });
         let cleanedUp = false;
         let downloadTimeout = null;
         let lastDataTime = Date.now();
