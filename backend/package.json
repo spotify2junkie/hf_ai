@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon --ignore 'temp/**' --ignore 'cache/**' src/server.js",
+    "dev": "nodemon --watch src --ignore temp --ignore cache --ignore '*.json' src/server.js",
     "test": "jest"
   },
   "dependencies": {
