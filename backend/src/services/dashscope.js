@@ -247,9 +247,9 @@ class DashScopeService {
    * Stream analysis from DashScope
    * @param {string} fileId - File ID from DashScope
    * @param {object} res - Express response object for SSE
-   * @param {number} timeout - Max time to wait in milliseconds (default: 15 seconds)
+   * @param {number} timeout - Max time to wait in milliseconds (default: 120 seconds)
    */
-  async streamAnalysis(fileId, res, timeout = 15000) {
+  async streamAnalysis(fileId, res, timeout = 120000) {
     return new Promise(async (resolve, reject) => {
       let timeoutId = null;
       let isTimedOut = false;

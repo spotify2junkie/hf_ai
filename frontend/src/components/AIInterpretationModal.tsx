@@ -164,11 +164,11 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
       case 'uploading':
         return '📤 Uploading to AI service...';
       case 'analyzing':
-        return '🤖 Analyzing paper (showing results after 15s)...';
+        return '🤖 Analyzing paper with AI (may take up to 2 minutes)...';
       case 'cached':
         return '⚡ Using cached analysis';
       case 'timeout':
-        return '⏱️ Partial results (timeout - showing first 15 seconds)';
+        return '⏱️ Partial results (timeout after 2 minutes)';
       case 'complete':
         return '✅ Analysis complete!';
       case 'error':
