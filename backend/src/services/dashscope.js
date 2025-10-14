@@ -247,14 +247,13 @@ class DashScopeService {
    * Stream analysis from DashScope
    * @param {string} fileId - File ID from DashScope
    * @param {object} res - Express response object for SSE
-   * @param {number} timeout - Max time to wait in milliseconds (default: 120 seconds)
+   * @param {number} warningTimeout - Time before showing "taking longer" warning (default: 10 seconds)
    */
-  async streamAnalysis(fileId, res, timeout = 120000) {
+  async streamAnalysis(fileId, res, warningTimeout = 10000) {
     return new Promise(async (resolve, reject) => {
-      let timeoutId = null;
-      let isTimedOut = false;
+      let warningTimeoutId = null;
       let streamEnded = false;
-      const abortController = new AbortController();
+      let hasReceivedData = false;
 
       // Helper to safely write to response
       const safeWrite = (data) => {
@@ -271,7 +270,7 @@ class DashScopeService {
       };
 
       try {
-        console.log(`🤖 Starting AI analysis for file: ${fileId} (timeout: ${timeout/1000}s)`);
+        console.log(`🤖 Starting AI analysis for file: ${fileId}`);
 
         const response = await fetch(`${this.baseURL}/chat/completions`, {
           method: 'POST',
@@ -279,7 +278,6 @@ class DashScopeService {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json'
           },
-          signal: abortController.signal,
           body: JSON.stringify({
             model: 'qwen-long',
             messages: [
@@ -301,32 +299,20 @@ class DashScopeService {
 
         console.log(`📡 Streaming response from DashScope...`);
 
-        // Set timeout to return partial results
-        timeoutId = setTimeout(() => {
-          if (streamEnded) return; // Don't timeout if already ended
+        // Set warning timeout - just notify, don't abort
+        warningTimeoutId = setTimeout(() => {
+          if (streamEnded || hasReceivedData) return;
 
-          isTimedOut = true;
-          streamEnded = true;
-          console.log(`⏱️  Timeout reached (${timeout/1000}s) - returning partial results`);
-
-          safeWrite(`data: ${JSON.stringify({ status: 'timeout', message: 'Partial results (timeout reached)' })}\n\n`);
-
-          // Abort the fetch request
-          try {
-            abortController.abort();
-          } catch (e) {
-            console.error('⚠️  Error aborting stream:', e.message);
-          }
-
-          resolve();
-        }, timeout);
+          console.log(`⏱️  Still waiting for first response (${warningTimeout/1000}s)...`);
+          safeWrite(`data: ${JSON.stringify({ status: 'slow', message: 'Analysis is taking longer than expected, please wait...' })}\n\n`);
+        }, warningTimeout);
 
         // Stream the response
         const reader = response.body;
         let buffer = '';
 
         reader.on('data', (chunk) => {
-          if (isTimedOut || streamEnded) return;
+          if (streamEnded) return;
 
           const text = chunk.toString();
           buffer += text;
@@ -350,6 +336,15 @@ class DashScopeService {
                 // Extract content from the response
                 if (parsed.choices && parsed.choices[0]?.delta?.content) {
                   const content = parsed.choices[0].delta.content;
+
+                  // Mark that we've received data
+                  if (!hasReceivedData) {
+                    hasReceivedData = true;
+                    console.log(`✅ First chunk received`);
+                    // Clear warning timeout since data is flowing
+                    if (warningTimeoutId) clearTimeout(warningTimeoutId);
+                  }
+
                   // Use safe write helper
                   safeWrite(`data: ${JSON.stringify({ chunk: content })}\n\n`);
                 }
@@ -367,10 +362,10 @@ class DashScopeService {
         });
 
         reader.on('end', () => {
-          if (isTimedOut || streamEnded) return;
+          if (streamEnded) return;
 
           streamEnded = true;
-          clearTimeout(timeoutId);
+          if (warningTimeoutId) clearTimeout(warningTimeoutId);
           console.log(`🏁 Stream ended naturally`);
 
           safeWrite(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
@@ -381,7 +376,7 @@ class DashScopeService {
           if (streamEnded) return;
 
           streamEnded = true;
-          clearTimeout(timeoutId);
+          if (warningTimeoutId) clearTimeout(warningTimeoutId);
           console.error('❌ Stream error:', error);
 
           safeWrite(`data: ${JSON.stringify({ error: error.message })}\n\n`);
@@ -389,7 +384,7 @@ class DashScopeService {
         });
 
       } catch (error) {
-        if (timeoutId) clearTimeout(timeoutId);
+        if (warningTimeoutId) clearTimeout(warningTimeoutId);
         console.error('❌ DashScope analysis error:', error.message);
         reject(new Error(`Failed to analyze paper: ${error.message}`));
       }

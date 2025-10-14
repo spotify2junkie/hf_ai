@@ -9,7 +9,7 @@ interface AIInterpretationModalProps {
   paper: Paper | null;
 }
 
-type Status = 'idle' | 'downloading' | 'uploading' | 'analyzing' | 'complete' | 'timeout' | 'cached' | 'error';
+type Status = 'idle' | 'downloading' | 'uploading' | 'analyzing' | 'complete' | 'timeout' | 'cached' | 'error' | 'slow';
 
 const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, onClose, paper }) => {
   const [content, setContent] = useState('');
@@ -164,11 +164,13 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
       case 'uploading':
         return '📤 Uploading to AI service...';
       case 'analyzing':
-        return '🤖 Analyzing paper with AI (may take up to 2 minutes)...';
+        return '🤖 Analyzing paper with AI...';
+      case 'slow':
+        return '⏳ Analysis is taking longer than expected, streaming results as they arrive...';
       case 'cached':
         return '⚡ Using cached analysis';
       case 'timeout':
-        return '⏱️ Partial results (timeout after 2 minutes)';
+        return '⏱️ Stream interrupted';
       case 'complete':
         return '✅ Analysis complete!';
       case 'error':
