@@ -28,3 +28,51 @@ export interface LoadingState {
   isLoading: boolean;
   error: string | null;
 }
+
+// Q&A Types
+export interface Prompt {
+  id: string;
+  text: string;
+  description: string;
+}
+
+export interface PromptCategory {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+  prompts: Prompt[];
+}
+
+export interface ConversationEntry {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
+
+export interface QASession {
+  sessionId: string;
+  paperId: string;
+  fileId: string;
+  createdAt: number;
+  lastAccessedAt: number;
+  expiresAt: number;
+  conversationHistory: ConversationEntry[];
+  metadata: {
+    paperTitle: string;
+    pdfUrl: string;
+  };
+}
+
+export interface QASessionResponse {
+  success: boolean;
+  sessionId: string;
+  fileId: string;
+  paperId: string;
+  createdAt: number;
+  expiresAt: number;
+  availablePrompts: PromptCategory[];
+  conversationHistory: ConversationEntry[];
+}
+
+export type QAStatus = 'idle' | 'processing' | 'streaming' | 'complete' | 'timeout' | 'error';
