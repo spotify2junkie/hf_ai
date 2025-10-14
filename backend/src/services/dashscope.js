@@ -85,6 +85,165 @@ class DashScopeService {
   }
 
   /**
+   * Stream Q&A response from DashScope
+   * @param {string} fileId - File ID from DashScope
+   * @param {string} question - User's question
+   * @param {array} conversationHistory - Previous conversation messages
+   * @param {object} res - Express response object for SSE
+   * @param {number} timeout - Max time to wait in milliseconds (default: 60 seconds)
+   */
+  async streamQA(fileId, question, conversationHistory = [], res, timeout = 60000) {
+    return new Promise(async (resolve, reject) => {
+      let timeoutId = null;
+      let isTimedOut = false;
+      let streamEnded = false;
+      const abortController = new AbortController();
+
+      // Helper to safely write to response
+      const safeWrite = (data) => {
+        if (!res.finished && res.writable && !streamEnded) {
+          try {
+            res.write(data);
+            return true;
+          } catch (e) {
+            console.error('⚠️  Failed to write to response:', e.message);
+            return false;
+          }
+        }
+        return false;
+      };
+
+      try {
+        console.log(`💬 Starting Q&A for file: ${fileId}`);
+        console.log(`❓ Question: ${question.substring(0, 100)}...`);
+
+        // Build messages array with conversation history
+        const messages = [
+          { role: 'system', content: 'You are a helpful assistant for academic paper analysis.' },
+          { role: 'system', content: `fileid://${fileId}` }
+        ];
+
+        // Add conversation history (last 4 messages for context)
+        const recentHistory = conversationHistory.slice(-4);
+        messages.push(...recentHistory);
+
+        // Add current question
+        messages.push({ role: 'user', content: question });
+
+        const response = await fetch(`${this.baseURL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          signal: abortController.signal,
+          body: JSON.stringify({
+            model: 'qwen-long',
+            messages: messages,
+            stream: true,
+            stream_options: {
+              include_usage: true
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Q&A failed: ${response.status} - ${errorText}`);
+        }
+
+        console.log(`📡 Streaming Q&A response...`);
+
+        // Set timeout
+        timeoutId = setTimeout(() => {
+          if (streamEnded) return;
+
+          isTimedOut = true;
+          streamEnded = true;
+          console.log(`⏱️  Q&A timeout reached (${timeout/1000}s)`);
+
+          safeWrite(`data: ${JSON.stringify({ status: 'timeout', message: 'Response timeout' })}\n\n`);
+
+          try {
+            abortController.abort();
+          } catch (e) {
+            console.error('⚠️  Error aborting stream:', e.message);
+          }
+
+          resolve();
+        }, timeout);
+
+        // Stream the response
+        const reader = response.body;
+        let buffer = '';
+
+        reader.on('data', (chunk) => {
+          if (isTimedOut || streamEnded) return;
+
+          const text = chunk.toString();
+          buffer += text;
+
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          lines.forEach(line => {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+
+              if (data === '[DONE]') {
+                return;
+              }
+
+              try {
+                const parsed = JSON.parse(data);
+
+                if (parsed.choices && parsed.choices[0]?.delta?.content) {
+                  const content = parsed.choices[0].delta.content;
+                  safeWrite(`data: ${JSON.stringify({ chunk: content })}\n\n`);
+                }
+
+                if (parsed.choices && parsed.choices[0]?.finish_reason) {
+                  console.log(`✅ Q&A complete. Reason: ${parsed.choices[0].finish_reason}`);
+                }
+
+              } catch (parseError) {
+                // Ignore parse errors
+              }
+            }
+          });
+        });
+
+        reader.on('end', () => {
+          if (isTimedOut || streamEnded) return;
+
+          streamEnded = true;
+          clearTimeout(timeoutId);
+          console.log(`🏁 Q&A stream ended`);
+
+          safeWrite(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
+          resolve();
+        });
+
+        reader.on('error', (error) => {
+          if (streamEnded) return;
+
+          streamEnded = true;
+          clearTimeout(timeoutId);
+          console.error('❌ Q&A stream error:', error);
+
+          safeWrite(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+          reject(error);
+        });
+
+      } catch (error) {
+        if (timeoutId) clearTimeout(timeoutId);
+        console.error('❌ DashScope Q&A error:', error.message);
+        reject(new Error(`Failed to process Q&A: ${error.message}`));
+      }
+    });
+  }
+
+  /**
    * Stream analysis from DashScope
    * @param {string} fileId - File ID from DashScope
    * @param {object} res - Express response object for SSE
