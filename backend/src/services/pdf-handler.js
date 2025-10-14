@@ -60,9 +60,9 @@ class PDFHandler {
       const filename = `paper_${uuidv4()}.pdf`;
       const filepath = path.join(this.tempDir, filename);
 
-      // Download PDF
+      // Download PDF with proper timeout
       const response = await fetch(pdfUrl, {
-        timeout: 30000, // 30 second timeout
+        timeout: 30000, // 30 second connection timeout
         headers: {
           'User-Agent': 'Daily-Paper-Extractor/1.0'
         }
@@ -92,10 +92,13 @@ class PDFHandler {
       await new Promise((resolve, reject) => {
         const fileStream = fs.createWriteStream(filepath);
         let cleanedUp = false;
+        let downloadTimeout = null;
+        let lastDataTime = Date.now();
 
         const cleanup = () => {
           if (!cleanedUp) {
             cleanedUp = true;
+            if (downloadTimeout) clearTimeout(downloadTimeout);
             fileStream.close();
             // Delete partially downloaded file
             if (fs.existsSync(filepath)) {
@@ -104,9 +107,38 @@ class PDFHandler {
           }
         };
 
+        // Set timeout for entire download (60 seconds)
+        const totalTimeout = setTimeout(() => {
+          cleanup();
+          reject(new Error('Download timeout - took longer than 60 seconds'));
+        }, 60000);
+
+        // Check for stalled download (no data for 10 seconds)
+        const checkStalled = setInterval(() => {
+          const timeSinceLastData = Date.now() - lastDataTime;
+          if (timeSinceLastData > 10000) {
+            clearInterval(checkStalled);
+            clearTimeout(totalTimeout);
+            cleanup();
+            reject(new Error('Download stalled - no data received for 10 seconds'));
+          }
+        }, 2000);
+
+        downloadTimeout = { total: totalTimeout, stalled: checkStalled };
+
         response.body.on('data', (chunk) => {
+          lastDataTime = Date.now();
           bytesWritten += chunk.length;
+
+          // Log progress every 1MB
+          if (bytesWritten % (1024 * 1024) < chunk.length) {
+            const progressMB = (bytesWritten / (1024 * 1024)).toFixed(2);
+            console.log(`📥 Downloaded: ${progressMB} MB`);
+          }
+
           if (bytesWritten > maxBytes) {
+            clearInterval(checkStalled);
+            clearTimeout(totalTimeout);
             cleanup();
             reject(new Error(`PDF file too large (exceeded ${maxBytes / (1024 * 1024)}MB limit)`));
           }
@@ -115,16 +147,22 @@ class PDFHandler {
         response.body.pipe(fileStream);
 
         response.body.on('error', (err) => {
+          clearInterval(checkStalled);
+          clearTimeout(totalTimeout);
           cleanup();
           reject(new Error(`Download stream error: ${err.message}`));
         });
 
         fileStream.on('error', (err) => {
+          clearInterval(checkStalled);
+          clearTimeout(totalTimeout);
           cleanup();
           reject(new Error(`File write error: ${err.message}`));
         });
 
         fileStream.on('finish', () => {
+          clearInterval(checkStalled);
+          clearTimeout(totalTimeout);
           resolve();
         });
       });
