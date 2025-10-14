@@ -15,6 +15,7 @@ const router = express.Router();
 router.post('/', async (req, res) => {
   const { pdf_url, paper_id, paper_title } = req.body;
   let pdfPath = null;
+  const requestStartTime = Date.now();
 
   try {
     // Validate and sanitize input
@@ -118,11 +119,17 @@ router.post('/', async (req, res) => {
     try {
       // Step 1: Download PDF
       res.write(`data: ${JSON.stringify({ status: 'downloading' })}\n\n`);
+      const downloadStartTime = Date.now();
       pdfPath = await pdfHandler.downloadPDF(pdf_url);
+      const downloadDuration = Date.now() - downloadStartTime;
+      console.log(`⏱️  PDF Download took: ${downloadDuration}ms (${(downloadDuration/1000).toFixed(2)}s)`);
 
       // Step 2: Upload to DashScope
       res.write(`data: ${JSON.stringify({ status: 'uploading' })}\n\n`);
+      const uploadStartTime = Date.now();
       const fileId = await dashscopeService.uploadPDF(pdfPath);
+      const uploadDuration = Date.now() - uploadStartTime;
+      console.log(`⏱️  PDF Upload to DashScope took: ${uploadDuration}ms (${(uploadDuration/1000).toFixed(2)}s)`);
 
       // Cache fileId for Q&A reuse (if paper_id is provided)
       if (sanitizedPaperId && sanitizedPaperId !== 'Unknown') {
@@ -132,9 +139,11 @@ router.post('/', async (req, res) => {
 
       // Step 3: Stream analysis
       res.write(`data: ${JSON.stringify({ status: 'analyzing' })}\n\n`);
+      const analysisStartTime = Date.now();
 
       // Capture analysis content for caching
       let analysisContent = '';
+      let firstChunkTime = null;
       const originalWrite = res.write.bind(res);
       res.write = function(chunk) {
         // Capture content chunks for caching
@@ -143,6 +152,12 @@ router.post('/', async (req, res) => {
           if (str.startsWith('data: ')) {
             const data = JSON.parse(str.slice(6));
             if (data.chunk) {
+              // Log time to first chunk
+              if (!firstChunkTime) {
+                firstChunkTime = Date.now();
+                const timeToFirstChunk = firstChunkTime - analysisStartTime;
+                console.log(`⏱️  Time to FIRST chunk: ${timeToFirstChunk}ms (${(timeToFirstChunk/1000).toFixed(2)}s)`);
+              }
               analysisContent += data.chunk;
             }
           }
@@ -154,6 +169,9 @@ router.post('/', async (req, res) => {
 
       await dashscopeService.streamAnalysis(fileId, res);
 
+      const totalAnalysisDuration = Date.now() - analysisStartTime;
+      console.log(`⏱️  Total Analysis (streaming) took: ${totalAnalysisDuration}ms (${(totalAnalysisDuration/1000).toFixed(2)}s)`);
+
       // Restore original write function
       res.write = originalWrite;
 
@@ -161,6 +179,16 @@ router.post('/', async (req, res) => {
       if (sanitizedPaperId && sanitizedPaperId !== 'Unknown' && analysisContent) {
         console.log(`💾 Caching analysis for paper ${sanitizedPaperId} (${analysisContent.length} chars)`);
         await cache.set(sanitizedPaperId, analysisContent);
+      }
+
+      const totalRequestDuration = Date.now() - requestStartTime;
+      console.log(`\n📊 TOTAL REQUEST TIME: ${totalRequestDuration}ms (${(totalRequestDuration/1000).toFixed(2)}s)`);
+      console.log(`   └─ Download: ${downloadDuration}ms (${((downloadDuration/totalRequestDuration)*100).toFixed(1)}%)`);
+      console.log(`   └─ Upload: ${uploadDuration}ms (${((uploadDuration/totalRequestDuration)*100).toFixed(1)}%)`);
+      console.log(`   └─ Analysis: ${totalAnalysisDuration}ms (${((totalAnalysisDuration/totalRequestDuration)*100).toFixed(1)}%)`);
+      if (firstChunkTime) {
+        const timeToFirstChunk = firstChunkTime - analysisStartTime;
+        console.log(`   └─ Wait for first chunk: ${timeToFirstChunk}ms (${((timeToFirstChunk/totalRequestDuration)*100).toFixed(1)}%)\n`);
       }
 
       res.end();
