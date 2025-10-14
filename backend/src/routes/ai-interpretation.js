@@ -124,6 +124,12 @@ router.post('/', async (req, res) => {
       res.write(`data: ${JSON.stringify({ status: 'uploading' })}\n\n`);
       const fileId = await dashscopeService.uploadPDF(pdfPath);
 
+      // Cache fileId for Q&A reuse (if paper_id is provided)
+      if (sanitizedPaperId && sanitizedPaperId !== 'Unknown') {
+        await cache.setFileId(sanitizedPaperId, fileId);
+        console.log(`💾 Cached fileId for Q&A: ${fileId}`);
+      }
+
       // Step 3: Stream analysis
       res.write(`data: ${JSON.stringify({ status: 'analyzing' })}\n\n`);
 
