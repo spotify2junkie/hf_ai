@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const papersRouter = require('./routes/papers');
 const aiInterpretationRouter = require('./routes/ai-interpretation');
+const qaRouter = require('./routes/qa');
 
 // Validate critical environment variables on startup
 if (!process.env.DASHSCOPE_API_KEY) {
@@ -33,7 +34,7 @@ const limiter = rateLimit({
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   // Skip rate limiting for health check endpoint
-  skip: (req) => req.path === '/health' || req.path === '/api/papers/health' || req.path === '/api/ai-interpretation/health',
+  skip: (req) => req.path === '/health' || req.path === '/api/papers/health' || req.path === '/api/ai-interpretation/health' || req.path === '/api/qa/health',
 });
 
 // Stricter rate limit for AI interpretation (resource intensive)
@@ -96,8 +97,9 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms'))
 
 app.use(express.json());
 
-// Routes - AI route registered BEFORE global limiter to use only aiLimiter
+// Routes - AI routes registered BEFORE global limiter to use only aiLimiter
 app.use('/api/ai-interpretation', aiLimiter, aiInterpretationRouter);
+app.use('/api/qa', aiLimiter, qaRouter);
 
 // Apply general rate limiting to remaining routes
 app.use(limiter);
