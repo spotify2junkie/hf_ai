@@ -173,6 +173,106 @@ class CacheService {
   }
 
   /**
+   * Store DashScope fileId for a paper
+   * @param {string} paperId - Paper identifier
+   * @param {string} fileId - DashScope file ID
+   * @param {number} ttl - Time to live in milliseconds (default: 24 hours)
+   */
+  async setFileId(paperId, fileId, ttl = 24 * 60 * 60 * 1000) {
+    const lockKey = `fileid_${paperId}`;
+
+    try {
+      await this.acquireLock(lockKey);
+
+      const cacheKey = `fileid_${this.getCacheKey(paperId)}`;
+      const cachePath = path.join(this.cacheDir, cacheKey);
+
+      const cacheData = {
+        paperId,
+        fileId,
+        timestamp: new Date().toISOString(),
+        cached_at: Date.now(),
+        expires_at: Date.now() + ttl
+      };
+
+      await fsPromises.writeFile(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
+      console.log(`💾 Cached fileId for ${paperId}: ${fileId} (TTL: ${ttl/1000/60}min)`);
+
+    } catch (error) {
+      console.error('⚠️  FileId cache write error:', error.message);
+    } finally {
+      this.releaseLock(lockKey);
+    }
+  }
+
+  /**
+   * Get cached DashScope fileId for a paper
+   * @param {string} paperId - Paper identifier
+   * @returns {Promise<string|null>} - Cached fileId or null
+   */
+  async getFileId(paperId) {
+    try {
+      const cacheKey = `fileid_${this.getCacheKey(paperId)}`;
+      const cachePath = path.join(this.cacheDir, cacheKey);
+
+      // Check if file exists
+      try {
+        await fsPromises.access(cachePath);
+      } catch {
+        return null;
+      }
+
+      // Read cached fileId
+      const content = await fsPromises.readFile(cachePath, 'utf8');
+      const cached = JSON.parse(content);
+
+      // Check expiration
+      if (Date.now() > cached.expires_at) {
+        console.log(`⏰ FileId expired for ${paperId}`);
+        await fsPromises.unlink(cachePath).catch(() => {});
+        return null;
+      }
+
+      const age = Date.now() - cached.cached_at;
+      console.log(`✅ FileId cache hit for ${paperId} (age: ${(age / 1000 / 60).toFixed(1)}min)`);
+
+      return cached.fileId;
+
+    } catch (error) {
+      console.error('⚠️  FileId cache read error:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Check if fileId is cached for a paper
+   * @param {string} paperId - Paper identifier
+   * @returns {Promise<boolean>}
+   */
+  async hasFileId(paperId) {
+    const fileId = await this.getFileId(paperId);
+    return fileId !== null;
+  }
+
+  /**
+   * Clear cached fileId for a paper
+   * @param {string} paperId - Paper identifier
+   */
+  async clearFileId(paperId) {
+    try {
+      const cacheKey = `fileid_${this.getCacheKey(paperId)}`;
+      const cachePath = path.join(this.cacheDir, cacheKey);
+
+      if (fs.existsSync(cachePath)) {
+        await fsPromises.unlink(cachePath);
+        console.log(`🗑️  Cleared fileId cache for ${paperId}`);
+      }
+    } catch (error) {
+      console.error('⚠️  FileId cache clear error:', error.message);
+    }
+  }
+
+  /**
    * Clear all cache entries older than specified age
    * @param {number} maxAge - Max age in milliseconds (default: 48 hours)
    */
