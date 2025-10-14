@@ -1,0 +1,13 @@
+{
+  "watch": ["src"],
+  "ignore": [
+    "temp/**",
+    "cache/**",
+    "**/*.json",
+    "**/node_modules/**"
+  ],
+  "ext": "js",
+  "env": {
+    "NODE_ENV": "development"
+  }
+}
