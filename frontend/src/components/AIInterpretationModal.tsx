@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Paper } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
+import InteractiveQAModal from './InteractiveQAModal';
 
 interface AIInterpretationModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
   const [content, setContent] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [showQAModal, setShowQAModal] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -141,7 +143,16 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
     setContent('');
     setStatus('idle');
     setError(null);
+    setShowQAModal(false);
     onClose();
+  };
+
+  const handleOpenQA = () => {
+    setShowQAModal(true);
+  };
+
+  const handleCloseQA = () => {
+    setShowQAModal(false);
   };
 
   if (!isOpen) return null;
@@ -253,14 +264,34 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
           <div className="text-sm text-gray-500">
             Powered by Alibaba Cloud DashScope (Qwen-Long)
           </div>
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Close
-          </button>
+          <div className="flex gap-2">
+            {status === 'complete' && content && (
+              <button
+                onClick={handleOpenQA}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                💬 Ask Questions
+              </button>
+            )}
+            <button
+              onClick={handleClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Interactive Q&A Modal */}
+      {showQAModal && (
+        <InteractiveQAModal
+          isOpen={showQAModal}
+          onClose={handleCloseQA}
+          paper={paper}
+          initialAnalysis={content}
+        />
+      )}
     </div>
   );
 };
