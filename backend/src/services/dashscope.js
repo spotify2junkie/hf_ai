@@ -250,10 +250,11 @@ class DashScopeService {
    * @param {number} warningTimeout - Time before showing "taking longer" warning (default: 10 seconds)
    */
   async streamAnalysis(fileId, res, warningTimeout = 10000) {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       let warningTimeoutId = null;
       let streamEnded = false;
       let hasReceivedData = false;
+      let chunkCount = 0;
 
       // Helper to safely write to response
       const safeWrite = (data) => {
@@ -269,32 +270,40 @@ class DashScopeService {
         return false;
       };
 
-      try {
-        console.log(`🤖 Starting AI analysis for file: ${fileId}`);
+      const cleanup = () => {
+        if (warningTimeoutId) {
+          clearTimeout(warningTimeoutId);
+          warningTimeoutId = null;
+        }
+      };
 
-        const response = await fetch(`${this.baseURL}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'qwen-long',
-            messages: [
-              { role: 'system', content: 'You are a helpful assistant.' },
-              { role: 'system', content: `fileid://${fileId}` },
-              { role: 'user', content: this.analysisPrompt }
-            ],
-            stream: true,
-            stream_options: {
-              include_usage: true
-            }
-          })
-        });
+      console.log(`🤖 Starting AI analysis for file: ${fileId}`);
 
+      // Make the fetch request
+      fetch(`${this.baseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'qwen-long',
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'system', content: `fileid://${fileId}` },
+            { role: 'user', content: this.analysisPrompt }
+          ],
+          stream: true,
+          stream_options: {
+            include_usage: true
+          }
+        })
+      })
+      .then(response => {
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
+          return response.text().then(errorText => {
+            throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
+          });
         }
 
         console.log(`📡 Streaming response from DashScope...`);
@@ -307,12 +316,16 @@ class DashScopeService {
           safeWrite(`data: ${JSON.stringify({ status: 'slow', message: 'Analysis is taking longer than expected, please wait...' })}\n\n`);
         }, warningTimeout);
 
-        // Stream the response
+        // Get the readable stream
         const reader = response.body;
         let buffer = '';
 
+        // Set up data handler
         reader.on('data', (chunk) => {
-          if (streamEnded) return;
+          if (streamEnded) {
+            console.warn('⚠️  Received data after stream ended');
+            return;
+          }
 
           const text = chunk.toString();
           buffer += text;
@@ -327,6 +340,7 @@ class DashScopeService {
 
               // Skip [DONE] message
               if (data === '[DONE]') {
+                console.log('📝 Received [DONE] marker');
                 return;
               }
 
@@ -336,64 +350,92 @@ class DashScopeService {
                 // Extract content from the response
                 if (parsed.choices && parsed.choices[0]?.delta?.content) {
                   const content = parsed.choices[0].delta.content;
+                  chunkCount++;
 
                   // Mark that we've received data
                   if (!hasReceivedData) {
                     hasReceivedData = true;
-                    console.log(`✅ First chunk received`);
+                    console.log(`✅ First chunk received (${content.length} chars)`);
                     // Clear warning timeout since data is flowing
-                    if (warningTimeoutId) clearTimeout(warningTimeoutId);
+                    if (warningTimeoutId) {
+                      clearTimeout(warningTimeoutId);
+                      warningTimeoutId = null;
+                    }
                   }
 
-                  // Log chunk to verify it's being received
-                  console.log(`📝 Chunk (${content.length} chars): ${content.substring(0, 50)}...`);
+                  // Log every 10th chunk or first 5 chunks
+                  if (chunkCount <= 5 || chunkCount % 10 === 0) {
+                    console.log(`📝 Chunk #${chunkCount} (${content.length} chars): ${content.substring(0, 30)}...`);
+                  }
 
                   // Use safe write helper
                   const written = safeWrite(`data: ${JSON.stringify({ chunk: content })}\n\n`);
                   if (!written) {
-                    console.error('❌ Failed to write chunk to response!');
+                    console.error(`❌ Failed to write chunk #${chunkCount} to response!`);
                   }
                 }
 
                 // Check for finish_reason
                 if (parsed.choices && parsed.choices[0]?.finish_reason) {
-                  console.log(`✅ Analysis complete. Reason: ${parsed.choices[0].finish_reason}`);
+                  console.log(`✅ Received finish_reason: ${parsed.choices[0].finish_reason}`);
                 }
 
               } catch (parseError) {
                 // Ignore JSON parse errors for non-JSON lines
+                console.warn('⚠️  Failed to parse SSE data:', data.substring(0, 100));
               }
             }
           });
         });
 
+        // Set up end handler
         reader.on('end', () => {
-          if (streamEnded) return;
+          if (streamEnded) {
+            console.warn('⚠️  end event fired multiple times');
+            return;
+          }
 
           streamEnded = true;
-          if (warningTimeoutId) clearTimeout(warningTimeoutId);
-          console.log(`🏁 Stream ended naturally`);
+          cleanup();
+          console.log(`🏁 Stream ended naturally after ${chunkCount} chunks`);
 
-          safeWrite(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
-          resolve();
+          // Send completion status
+          const written = safeWrite(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
+          if (written) {
+            console.log('✅ Sent complete status to client');
+          } else {
+            console.error('❌ Failed to send complete status to client');
+          }
+
+          // Small delay to ensure data is flushed before resolving
+          // This prevents res.end() from being called too quickly
+          setTimeout(() => {
+            console.log('🔚 Resolving streamAnalysis promise');
+            resolve();
+          }, 100);
         });
 
+        // Set up error handler
         reader.on('error', (error) => {
-          if (streamEnded) return;
+          if (streamEnded) {
+            console.warn('⚠️  Error event fired after stream ended');
+            return;
+          }
 
           streamEnded = true;
-          if (warningTimeoutId) clearTimeout(warningTimeoutId);
+          cleanup();
           console.error('❌ Stream error:', error);
 
           safeWrite(`data: ${JSON.stringify({ error: error.message })}\n\n`);
           reject(error);
         });
 
-      } catch (error) {
-        if (warningTimeoutId) clearTimeout(warningTimeoutId);
+      })
+      .catch(error => {
+        cleanup();
         console.error('❌ DashScope analysis error:', error.message);
         reject(new Error(`Failed to analyze paper: ${error.message}`));
-      }
+      });
     });
   }
 }
