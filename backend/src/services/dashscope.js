@@ -278,6 +278,7 @@ class DashScopeService {
       };
 
       console.log(`🤖 Starting AI analysis for file: ${fileId}`);
+      console.log(`⏰ Promise created, waiting for stream to complete...`);
 
       // Make the fetch request
       fetch(`${this.baseURL}/chat/completions`, {
@@ -300,13 +301,15 @@ class DashScopeService {
         })
       })
       .then(response => {
+        console.log(`📥 Received response from DashScope, status: ${response.status}`);
+
         if (!response.ok) {
           return response.text().then(errorText => {
             throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
           });
         }
 
-        console.log(`📡 Streaming response from DashScope...`);
+        console.log(`📡 Setting up stream handlers...`);
 
         // Set warning timeout - just notify, don't abort
         warningTimeoutId = setTimeout(() => {
@@ -318,9 +321,16 @@ class DashScopeService {
 
         // Get the readable stream
         const reader = response.body;
+        console.log(`📖 Got response.body stream:`, reader ? 'EXISTS' : 'NULL');
+
+        if (!reader) {
+          throw new Error('No response body stream available');
+        }
+
         let buffer = '';
 
         // Set up data handler
+        console.log(`🔧 Attaching 'data' event handler...`);
         reader.on('data', (chunk) => {
           if (streamEnded) {
             console.warn('⚠️  Received data after stream ended');
@@ -389,7 +399,10 @@ class DashScopeService {
         });
 
         // Set up end handler
+        console.log(`🔧 Attaching 'end' event handler...`);
         reader.on('end', () => {
+          console.log(`🎬 'end' event fired!`);
+
           if (streamEnded) {
             console.warn('⚠️  end event fired multiple times');
             return;
@@ -416,7 +429,10 @@ class DashScopeService {
         });
 
         // Set up error handler
+        console.log(`🔧 Attaching 'error' event handler...`);
         reader.on('error', (error) => {
+          console.log(`⚠️  'error' event fired!`);
+
           if (streamEnded) {
             console.warn('⚠️  Error event fired after stream ended');
             return;
@@ -430,8 +446,11 @@ class DashScopeService {
           reject(error);
         });
 
+        console.log(`✅ All event handlers attached, stream should start flowing...`);
+
       })
       .catch(error => {
+        console.log(`💥 Catch block triggered!`);
         cleanup();
         console.error('❌ DashScope analysis error:', error.message);
         reject(new Error(`Failed to analyze paper: ${error.message}`));
