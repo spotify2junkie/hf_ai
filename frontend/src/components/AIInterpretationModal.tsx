@@ -106,7 +106,12 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
                 }
 
                 if (parsed.chunk) {
-                  setContent(prev => prev + parsed.chunk);
+                  console.log(`🔵 Frontend received chunk (${parsed.chunk.length} chars):`, parsed.chunk.substring(0, 50));
+                  setContent(prev => {
+                    const newContent = prev + parsed.chunk;
+                    console.log(`📝 Total content length: ${newContent.length} chars`);
+                    return newContent;
+                  });
                 }
 
                 if (parsed.error) {
