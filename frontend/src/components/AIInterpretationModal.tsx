@@ -253,7 +253,10 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
               </button>
             </div>
           ) : content ? (
-            <MarkdownRenderer content={content} className="prose max-w-none" />
+            <div>
+              <div className="text-xs text-gray-500 mb-2">Content length: {content.length} characters</div>
+              <MarkdownRenderer content={content} className="prose max-w-none" />
+            </div>
           ) : (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-4">
@@ -262,6 +265,7 @@ const AIInterpretationModal: React.FC<AIInterpretationModalProps> = ({ isOpen, o
                 </svg>
               </div>
               <p className="text-gray-500">Waiting for AI analysis...</p>
+              <p className="text-xs text-gray-400 mt-2">Status: {status}, Content: {content.length} chars</p>
             </div>
           )}
         </div>
