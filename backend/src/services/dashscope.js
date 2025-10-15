@@ -345,8 +345,14 @@ class DashScopeService {
                     if (warningTimeoutId) clearTimeout(warningTimeoutId);
                   }
 
+                  // Log chunk to verify it's being received
+                  console.log(`📝 Chunk (${content.length} chars): ${content.substring(0, 50)}...`);
+
                   // Use safe write helper
-                  safeWrite(`data: ${JSON.stringify({ chunk: content })}\n\n`);
+                  const written = safeWrite(`data: ${JSON.stringify({ chunk: content })}\n\n`);
+                  if (!written) {
+                    console.error('❌ Failed to write chunk to response!');
+                  }
                 }
 
                 // Check for finish_reason
