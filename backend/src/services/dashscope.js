@@ -448,6 +448,13 @@ class DashScopeService {
 
         console.log(`✅ All event handlers attached, stream should start flowing...`);
 
+        // CRITICAL: Return a Promise that never resolves here
+        // The actual resolve() is called in the 'end' event handler
+        // This prevents the .then() from completing immediately
+        return new Promise(() => {
+          console.log(`⏸️  Holding .then() Promise open until stream completes...`);
+        });
+
       })
       .catch(error => {
         console.log(`💥 Catch block triggered!`);
