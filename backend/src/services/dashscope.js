@@ -382,6 +382,9 @@ class DashScopeService {
                   const written = safeWrite(`data: ${JSON.stringify({ chunk: content })}\n\n`);
                   if (!written) {
                     console.error(`❌ Failed to write chunk #${chunkCount} to response!`);
+                  } else {
+                    // Force flush to prevent 512-byte buffering
+                    if (res.flush) res.flush();
                   }
                 }
 
@@ -416,6 +419,8 @@ class DashScopeService {
           const written = safeWrite(`data: ${JSON.stringify({ status: 'complete' })}\n\n`);
           if (written) {
             console.log('✅ Sent complete status to client');
+            // Force flush to ensure status is sent immediately
+            if (res.flush) res.flush();
           } else {
             console.error('❌ Failed to send complete status to client');
           }
@@ -447,13 +452,8 @@ class DashScopeService {
         });
 
         console.log(`✅ All event handlers attached, stream should start flowing...`);
-
-        // CRITICAL: Return a Promise that never resolves here
-        // The actual resolve() is called in the 'end' event handler
-        // This prevents the .then() from completing immediately
-        return new Promise(() => {
-          console.log(`⏸️  Holding .then() Promise open until stream completes...`);
-        });
+        // Event handlers will call resolve()/reject() from outer Promise
+        // No return needed - .then() completes, but outer Promise stays open
 
       })
       .catch(error => {

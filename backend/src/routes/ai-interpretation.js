@@ -191,7 +191,9 @@ router.post('/', async (req, res) => {
         console.log(`   └─ Wait for first chunk: ${timeToFirstChunk}ms (${((timeToFirstChunk/totalRequestDuration)*100).toFixed(1)}%)\n`);
       }
 
+      // For SSE streams, close the response after streamAnalysis completes
       res.end();
+      console.log(`🔚 Response closed after stream completion`);
 
     } finally {
       // Always cleanup resources, even on error
