@@ -85,6 +85,64 @@ class DashScopeService {
   }
 
   /**
+   * Translate English abstract to Chinese
+   * @param {string} abstract - English abstract text
+   * @returns {Promise<string>} - Chinese translation
+   */
+  async translateAbstract(abstract) {
+    try {
+      console.log(`🌏 Translating abstract (${abstract.length} chars)...`);
+
+      const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'qwen-plus',
+          input: {
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a professional academic translator. Translate the given English academic abstract to Chinese. Keep the translation accurate, professional, and maintain academic tone. Only return the Chinese translation without any additional text or explanations.'
+              },
+              {
+                role: 'user',
+                content: abstract
+              }
+            ]
+          },
+          parameters: {
+            result_format: 'message'
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Translation failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      // Extract translation from response
+      const translation = data.output?.choices?.[0]?.message?.content;
+
+      if (!translation) {
+        throw new Error('No translation returned from API');
+      }
+
+      console.log(`✅ Translation complete (${translation.length} chars)`);
+      return translation;
+
+    } catch (error) {
+      console.error('❌ Translation error:', error.message);
+      throw new Error(`Failed to translate abstract: ${error.message}`);
+    }
+  }
+
+  /**
    * Stream Q&A response from DashScope
    * @param {string} fileId - File ID from DashScope
    * @param {string} question - User's question
