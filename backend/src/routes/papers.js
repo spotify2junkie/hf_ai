@@ -6,42 +6,6 @@ const cache = require('../services/cache');
 const router = express.Router();
 
 /**
- * Background translation helper
- * Translates uncached abstracts and stores in cache
- */
-async function translateUncachedAbstracts(papers) {
-  const uncachedPapers = papers.filter(paper => !paper.abstract_zh && paper.abstract);
-
-  if (uncachedPapers.length === 0) {
-    console.log('📝 All papers already have translations cached');
-    return;
-  }
-
-  console.log(`🌏 Starting background translation for ${uncachedPapers.length} papers...`);
-
-  // Process translations one by one to avoid rate limiting
-  for (const paper of uncachedPapers) {
-    try {
-      console.log(`🌏 Translating abstract for paper: ${paper.paper_id}`);
-      const translation = await dashscopeService.translateAbstract(paper.abstract);
-
-      // Cache the translation
-      await cache.setTranslation(paper.paper_id, translation);
-      console.log(`✅ Translation cached for ${paper.paper_id}`);
-
-      // Small delay to avoid rate limiting (500ms between translations)
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-    } catch (error) {
-      console.error(`❌ Translation failed for ${paper.paper_id}:`, error.message);
-      // Continue with next paper even if this one fails
-    }
-  }
-
-  console.log(`✅ Background translation complete for ${uncachedPapers.length} papers`);
-}
-
-/**
  * GET /api/papers
  * Fetch papers for a specific date
  * Query params: date (YYYY-MM-DD format)
@@ -84,35 +48,47 @@ router.get('/', async (req, res) => {
 
     console.log(`📊 Fetched ${papers.length} papers from HuggingFace`);
 
-    // Add cached translations to papers (if available)
+    // Translate papers synchronously (check cache first, then translate if needed)
     const papersWithTranslations = await Promise.all(
       papers.map(async (paper) => {
-        const translation = await cache.getTranslation(paper.paper_id);
+        // Skip if no abstract
+        if (!paper.abstract) {
+          return paper;
+        }
 
-        if (translation) {
-          console.log(`✅ Found cached translation for ${paper.paper_id}`);
+        // Check cache first
+        const cachedTranslation = await cache.getTranslation(paper.paper_id);
+
+        if (cachedTranslation) {
+          console.log(`✅ Cache hit for ${paper.paper_id}`);
+          return {
+            ...paper,
+            abstract_zh: cachedTranslation
+          };
+        }
+
+        // No cache - translate now
+        try {
+          console.log(`🌏 Translating ${paper.paper_id} (${paper.abstract.length} chars)...`);
+          const translation = await dashscopeService.translateAbstract(paper.abstract);
+
+          // Cache the translation
+          await cache.setTranslation(paper.paper_id, translation);
+          console.log(`✅ Translated and cached ${paper.paper_id}`);
+
           return {
             ...paper,
             abstract_zh: translation
           };
+        } catch (error) {
+          console.error(`❌ Translation failed for ${paper.paper_id}:`, error.message);
+          return paper; // Return without translation on error
         }
-
-        return paper;
       })
     );
 
-    // Count papers with and without translations
     const withTranslation = papersWithTranslations.filter(p => p.abstract_zh).length;
-    const withoutTranslation = papersWithTranslations.length - withTranslation;
-    console.log(`📊 Papers with translation: ${withTranslation}, without: ${withoutTranslation}`);
-
-    // Background translation for uncached abstracts (fire and forget)
-    console.log(`🚀 Triggering background translation...`);
-    setImmediate(() => {
-      translateUncachedAbstracts(papersWithTranslations).catch(err => {
-        console.error('❌ Background translation error:', err);
-      });
-    });
+    console.log(`📊 Final result: ${withTranslation}/${papers.length} papers with translations`);
 
     res.json({
       success: true,
