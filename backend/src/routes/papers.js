@@ -82,12 +82,15 @@ router.get('/', async (req, res) => {
     // Fetch papers from HuggingFace API
     const papers = await huggingFaceService.fetchDailyPapers(date);
 
+    console.log(`📊 Fetched ${papers.length} papers from HuggingFace`);
+
     // Add cached translations to papers (if available)
     const papersWithTranslations = await Promise.all(
       papers.map(async (paper) => {
         const translation = await cache.getTranslation(paper.paper_id);
 
         if (translation) {
+          console.log(`✅ Found cached translation for ${paper.paper_id}`);
           return {
             ...paper,
             abstract_zh: translation
@@ -98,9 +101,17 @@ router.get('/', async (req, res) => {
       })
     );
 
+    // Count papers with and without translations
+    const withTranslation = papersWithTranslations.filter(p => p.abstract_zh).length;
+    const withoutTranslation = papersWithTranslations.length - withTranslation;
+    console.log(`📊 Papers with translation: ${withTranslation}, without: ${withoutTranslation}`);
+
     // Background translation for uncached abstracts (fire and forget)
+    console.log(`🚀 Triggering background translation...`);
     setImmediate(() => {
-      translateUncachedAbstracts(papersWithTranslations);
+      translateUncachedAbstracts(papersWithTranslations).catch(err => {
+        console.error('❌ Background translation error:', err);
+      });
     });
 
     res.json({
