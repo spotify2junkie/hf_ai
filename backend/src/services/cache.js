@@ -273,6 +273,106 @@ class CacheService {
   }
 
   /**
+   * Store translation for a paper abstract
+   * @param {string} paperId - Paper identifier
+   * @param {string} translation - Chinese translation
+   * @param {number} ttl - Time to live in milliseconds (default: 7 days)
+   */
+  async setTranslation(paperId, translation, ttl = 7 * 24 * 60 * 60 * 1000) {
+    const lockKey = `translation_${paperId}`;
+
+    try {
+      await this.acquireLock(lockKey);
+
+      const cacheKey = `translation_${this.getCacheKey(paperId)}`;
+      const cachePath = path.join(this.cacheDir, cacheKey);
+
+      const cacheData = {
+        paperId,
+        translation,
+        timestamp: new Date().toISOString(),
+        cached_at: Date.now(),
+        expires_at: Date.now() + ttl
+      };
+
+      await fsPromises.writeFile(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
+      console.log(`💾 Cached translation for ${paperId} (${translation.length} chars, TTL: ${ttl/1000/60/60/24}days)`);
+
+    } catch (error) {
+      console.error('⚠️  Translation cache write error:', error.message);
+    } finally {
+      this.releaseLock(lockKey);
+    }
+  }
+
+  /**
+   * Get cached translation for a paper
+   * @param {string} paperId - Paper identifier
+   * @returns {Promise<string|null>} - Cached translation or null
+   */
+  async getTranslation(paperId) {
+    try {
+      const cacheKey = `translation_${this.getCacheKey(paperId)}`;
+      const cachePath = path.join(this.cacheDir, cacheKey);
+
+      // Check if file exists
+      try {
+        await fsPromises.access(cachePath);
+      } catch {
+        return null;
+      }
+
+      // Read cached translation
+      const content = await fsPromises.readFile(cachePath, 'utf8');
+      const cached = JSON.parse(content);
+
+      // Check expiration
+      if (Date.now() > cached.expires_at) {
+        console.log(`⏰ Translation expired for ${paperId}`);
+        await fsPromises.unlink(cachePath).catch(() => {});
+        return null;
+      }
+
+      const age = Date.now() - cached.cached_at;
+      console.log(`✅ Translation cache hit for ${paperId} (age: ${(age / 1000 / 60 / 60 / 24).toFixed(1)}days)`);
+
+      return cached.translation;
+
+    } catch (error) {
+      console.error('⚠️  Translation cache read error:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Check if translation is cached for a paper
+   * @param {string} paperId - Paper identifier
+   * @returns {Promise<boolean>}
+   */
+  async hasTranslation(paperId) {
+    const translation = await this.getTranslation(paperId);
+    return translation !== null;
+  }
+
+  /**
+   * Clear cached translation for a paper
+   * @param {string} paperId - Paper identifier
+   */
+  async clearTranslation(paperId) {
+    try {
+      const cacheKey = `translation_${this.getCacheKey(paperId)}`;
+      const cachePath = path.join(this.cacheDir, cacheKey);
+
+      if (fs.existsSync(cachePath)) {
+        await fsPromises.unlink(cachePath);
+        console.log(`🗑️  Cleared translation cache for ${paperId}`);
+      }
+    } catch (error) {
+      console.error('⚠️  Translation cache clear error:', error.message);
+    }
+  }
+
+  /**
    * Clear all cache entries older than specified age
    * @param {number} maxAge - Max age in milliseconds (default: 48 hours)
    */
