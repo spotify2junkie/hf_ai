@@ -4,6 +4,7 @@ export interface Paper {
   title: string;
   authors: string[];
   abstract: string;
+  abstract_zh?: string; // Chinese translation (optional)
   pdf_url: string | null;
   topics: string[];
   published_date: string;

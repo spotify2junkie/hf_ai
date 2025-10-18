@@ -79,6 +79,16 @@ const PapersTable: React.FC<PapersTableProps> = ({ papers }) => {
                           : truncateText(paper.abstract)
                         }
                       </p>
+                      {paper.abstract_zh && (
+                        <p className="text-sm text-gray-700 leading-relaxed mt-2 pt-2 border-t border-gray-200">
+                          <span className="text-xs text-gray-500 font-medium">中文摘要：</span>
+                          <br />
+                          {expandedPaper === index
+                            ? paper.abstract_zh
+                            : truncateText(paper.abstract_zh)
+                          }
+                        </p>
+                      )}
                     </div>
                   </td>
 
@@ -236,9 +246,16 @@ const PapersTable: React.FC<PapersTableProps> = ({ papers }) => {
           {papers.map((paper, index) => (
             <div key={index} className="bg-white border rounded-lg p-4 shadow-sm">
               <h3 className="font-semibold text-gray-900 mb-2">{paper.title}</h3>
-              <p className="text-sm text-gray-600 mb-3">
+              <p className="text-sm text-gray-600 mb-2">
                 {truncateText(paper.abstract, 100)}
               </p>
+              {paper.abstract_zh && (
+                <p className="text-sm text-gray-700 mb-3 pt-2 border-t border-gray-200">
+                  <span className="text-xs text-gray-500 font-medium">中文摘要：</span>
+                  <br />
+                  {truncateText(paper.abstract_zh, 100)}
+                </p>
+              )}
 
               <div className="space-y-2">
                 <div>
