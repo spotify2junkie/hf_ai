@@ -2,6 +2,7 @@ const express = require('express');
 const huggingFaceService = require('../services/huggingface');
 const dashscopeService = require('../services/dashscope');
 const cache = require('../services/cache');
+const papersCache = require('../services/papers-cache');
 
 const router = express.Router();
 
@@ -43,10 +44,29 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Fetch papers from HuggingFace API
-    const papers = await huggingFaceService.fetchDailyPapers(date);
+    // Check cache first
+    const cachedPapers = await papersCache.getPapersByDate(date);
 
-    console.log(`📊 Fetched ${papers.length} papers from HuggingFace`);
+    let papers;
+    let source = 'cache';
+
+    if (cachedPapers && cachedPapers.length > 0) {
+      console.log(`✅ Cache hit: Found ${cachedPapers.length} papers for ${date}`);
+      papers = cachedPapers;
+    } else {
+      console.log(`❌ Cache miss: Fetching papers from HuggingFace for ${date}`);
+
+      // Fetch papers from HuggingFace API
+      papers = await huggingFaceService.fetchDailyPapers(date);
+      source = 'api';
+
+      console.log(`📊 Fetched ${papers.length} papers from HuggingFace`);
+
+      // Cache papers asynchronously (don't wait for it)
+      papersCache.cachePapers(papers, date).catch(err => {
+        console.error('⚠️  Failed to cache papers:', err);
+      });
+    }
 
     // Translate papers synchronously (check cache first, then translate if needed)
     const papersWithTranslations = await Promise.all(
@@ -94,7 +114,8 @@ router.get('/', async (req, res) => {
       success: true,
       date: date,
       count: papersWithTranslations.length,
-      papers: papersWithTranslations
+      papers: papersWithTranslations,
+      source: source // 'cache' or 'api'
     });
 
   } catch (error) {
@@ -124,18 +145,121 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/papers/cache/stats
+ * Get cache statistics
+ */
+router.get('/cache/stats', async (req, res) => {
+  try {
+    const stats = await papersCache.getCacheStats();
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      cache: stats
+    });
+  } catch (error) {
+    console.error('Cache stats error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve cache statistics',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * DELETE /api/papers/cache/:date
+ * Invalidate cache for a specific date
+ */
+router.delete('/cache/:date', async (req, res) => {
+  try {
+    const { date } = req.params;
+
+    if (!huggingFaceService.isValidDate(date)) {
+      return res.status(400).json({
+        error: 'Invalid date format. Please use YYYY-MM-DD format',
+        provided: date
+      });
+    }
+
+    const deletedCount = await papersCache.invalidateCache(date);
+
+    res.json({
+      success: true,
+      message: `Cache invalidated for ${date}`,
+      deletedCount: deletedCount
+    });
+  } catch (error) {
+    console.error('Cache invalidation error:', error);
+    res.status(500).json({
+      error: 'Failed to invalidate cache',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * POST /api/papers/cache/cleanup
+ * Clean up expired cache entries
+ */
+router.post('/cache/cleanup', async (req, res) => {
+  try {
+    const deletedCount = await papersCache.cleanupExpiredCache();
+
+    res.json({
+      success: true,
+      message: 'Expired cache entries cleaned up',
+      deletedCount: deletedCount
+    });
+  } catch (error) {
+    console.error('Cache cleanup error:', error);
+    res.status(500).json({
+      error: 'Failed to clean up cache',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
  * GET /api/papers/health
  * Health check for papers service
  */
-router.get('/health', (req, res) => {
-  res.json({
-    service: 'papers',
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      fetchPapers: 'GET /api/papers?date=YYYY-MM-DD'
-    }
-  });
+router.get('/health', async (req, res) => {
+  try {
+    const cacheStats = await papersCache.getCacheStats();
+
+    res.json({
+      service: 'papers',
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      cache: {
+        enabled: true,
+        validPapers: cacheStats.validCachedPapers,
+        totalPapers: cacheStats.totalPapers
+      },
+      endpoints: {
+        fetchPapers: 'GET /api/papers?date=YYYY-MM-DD',
+        cacheStats: 'GET /api/papers/cache/stats',
+        invalidateCache: 'DELETE /api/papers/cache/:date',
+        cleanupCache: 'POST /api/papers/cache/cleanup'
+      }
+    });
+  } catch (error) {
+    res.json({
+      service: 'papers',
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      cache: {
+        enabled: true,
+        status: 'error retrieving stats'
+      },
+      endpoints: {
+        fetchPapers: 'GET /api/papers?date=YYYY-MM-DD',
+        cacheStats: 'GET /api/papers/cache/stats',
+        invalidateCache: 'DELETE /api/papers/cache/:date',
+        cleanupCache: 'POST /api/papers/cache/cleanup'
+      }
+    });
+  }
 });
 
 module.exports = router;
