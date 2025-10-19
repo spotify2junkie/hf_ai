@@ -1,0 +1,266 @@
+/**
+ * Papers Cache Service
+ *
+ * Manages caching of academic papers in Supabase using Prisma ORM.
+ * Implements cache-first strategy with automatic expiration.
+ */
+
+const prisma = require('./prisma');
+
+class PapersCacheService {
+  constructor() {
+    // Default cache TTL: 24 hours
+    this.CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+    // For today's papers, use shorter TTL (1 hour) as they update frequently
+    this.TODAY_CACHE_TTL_MS = 60 * 60 * 1000;
+  }
+
+  /**
+   * Get cached papers for a specific date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<Array|null>} Array of papers or null if cache miss/expired
+   */
+  async getPapersByDate(date) {
+    try {
+      const now = new Date();
+      const papers = await prisma.paper.findMany({
+        where: {
+          publishedDate: new Date(date),
+          cacheExpiresAt: {
+            gte: now, // Only return papers with valid cache
+          },
+        },
+        orderBy: [
+          { upvotes: 'desc' },
+          { title: 'asc' },
+        ],
+      });
+
+      if (papers.length === 0) {
+        return null; // Cache miss
+      }
+
+      // Transform database format to API format
+      return papers.map(this.transformPaperFromDb);
+    } catch (error) {
+      console.error('Error fetching papers from cache:', error);
+      return null; // Return null on error to fallback to API
+    }
+  }
+
+  /**
+   * Store papers in cache for a specific date
+   * @param {Array} papers - Array of paper objects
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<boolean>} Success status
+   */
+  async cachePapers(papers, date) {
+    try {
+      // Determine cache TTL based on date
+      const isToday = date === new Date().toISOString().split('T')[0];
+      const cacheTtl = isToday ? this.TODAY_CACHE_TTL_MS : this.CACHE_TTL_MS;
+      const expiresAt = new Date(Date.now() + cacheTtl);
+
+      // Transform and upsert papers
+      const upsertPromises = papers.map((paper) => {
+        const dbPaper = this.transformPaperToDb(paper, date, expiresAt);
+
+        return prisma.paper.upsert({
+          where: { paperId: dbPaper.paperId },
+          update: {
+            ...dbPaper,
+            updatedAt: new Date(),
+          },
+          create: dbPaper,
+        });
+      });
+
+      await Promise.all(upsertPromises);
+
+      console.log(
+        `Successfully cached ${papers.length} papers for ${date} (expires: ${expiresAt.toISOString()})`
+      );
+      return true;
+    } catch (error) {
+      console.error('Error caching papers:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if cache exists and is valid for a date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<boolean>}
+   */
+  async hasValidCache(date) {
+    try {
+      const count = await prisma.paper.count({
+        where: {
+          publishedDate: new Date(date),
+          cacheExpiresAt: {
+            gte: new Date(),
+          },
+        },
+      });
+
+      return count > 0;
+    } catch (error) {
+      console.error('Error checking cache validity:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Invalidate (delete) cache for a specific date
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @returns {Promise<number>} Number of papers deleted
+   */
+  async invalidateCache(date) {
+    try {
+      const result = await prisma.paper.deleteMany({
+        where: {
+          publishedDate: new Date(date),
+        },
+      });
+
+      console.log(`Invalidated cache for ${date}: ${result.count} papers deleted`);
+      return result.count;
+    } catch (error) {
+      console.error('Error invalidating cache:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Clean up expired cache entries
+   * @returns {Promise<number>} Number of papers deleted
+   */
+  async cleanupExpiredCache() {
+    try {
+      const result = await prisma.paper.deleteMany({
+        where: {
+          cacheExpiresAt: {
+            lt: new Date(),
+          },
+        },
+      });
+
+      if (result.count > 0) {
+        console.log(`Cleaned up ${result.count} expired cache entries`);
+      }
+
+      return result.count;
+    } catch (error) {
+      console.error('Error cleaning up cache:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Transform paper from database format to API format
+   * @param {Object} dbPaper - Paper from database
+   * @returns {Object} Paper in API format
+   */
+  transformPaperFromDb(dbPaper) {
+    return {
+      paper_id: dbPaper.paperId,
+      title: dbPaper.title,
+      authors: Array.isArray(dbPaper.authors) ? dbPaper.authors : [],
+      abstract: dbPaper.abstract,
+      abstract_zh: dbPaper.abstractZh,
+      pdf_url: dbPaper.pdfUrl,
+      topics: Array.isArray(dbPaper.topics) ? dbPaper.topics : [],
+      published_date: dbPaper.publishedDate.toISOString().split('T')[0],
+      upvotes: dbPaper.upvotes,
+    };
+  }
+
+  /**
+   * Transform paper from API format to database format
+   * @param {Object} apiPaper - Paper from API
+   * @param {string} date - Published date
+   * @param {Date} expiresAt - Cache expiration timestamp
+   * @returns {Object} Paper in database format
+   */
+  transformPaperToDb(apiPaper, date, expiresAt) {
+    return {
+      paperId: apiPaper.paper_id || apiPaper.paperId || `unknown-${Date.now()}`,
+      title: apiPaper.title,
+      authors: apiPaper.authors || [],
+      abstract: apiPaper.abstract || null,
+      abstractZh: apiPaper.abstract_zh || apiPaper.abstractZh || null,
+      pdfUrl: apiPaper.pdf_url || apiPaper.pdfUrl || null,
+      topics: apiPaper.topics || [],
+      publishedDate: new Date(date),
+      upvotes: apiPaper.upvotes || 0,
+      cacheExpiresAt: expiresAt,
+    };
+  }
+
+  /**
+   * Get cache statistics
+   * @returns {Promise<Object>} Cache statistics
+   */
+  async getCacheStats() {
+    try {
+      const total = await prisma.paper.count();
+      const valid = await prisma.paper.count({
+        where: {
+          cacheExpiresAt: {
+            gte: new Date(),
+          },
+        },
+      });
+      const expired = total - valid;
+
+      const oldestValid = await prisma.paper.findFirst({
+        where: {
+          cacheExpiresAt: {
+            gte: new Date(),
+          },
+        },
+        orderBy: {
+          fetchedAt: 'asc',
+        },
+        select: {
+          publishedDate: true,
+          fetchedAt: true,
+        },
+      });
+
+      const newestValid = await prisma.paper.findFirst({
+        where: {
+          cacheExpiresAt: {
+            gte: new Date(),
+          },
+        },
+        orderBy: {
+          fetchedAt: 'desc',
+        },
+        select: {
+          publishedDate: true,
+          fetchedAt: true,
+        },
+      });
+
+      return {
+        totalPapers: total,
+        validCachedPapers: valid,
+        expiredPapers: expired,
+        oldestCachedDate: oldestValid?.publishedDate,
+        newestCachedDate: newestValid?.publishedDate,
+      };
+    } catch (error) {
+      console.error('Error getting cache stats:', error);
+      return {
+        totalPapers: 0,
+        validCachedPapers: 0,
+        expiredPapers: 0,
+        error: error.message,
+      };
+    }
+  }
+}
+
+module.exports = new PapersCacheService();
