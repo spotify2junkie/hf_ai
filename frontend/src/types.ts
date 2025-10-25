@@ -77,3 +77,30 @@ export interface QASessionResponse {
 }
 
 export type QAStatus = 'idle' | 'processing' | 'streaming' | 'complete' | 'timeout' | 'error';
+
+// Search Types
+export interface SearchResult extends Paper {
+  score: number; // Match score 0-100
+}
+
+export interface SearchPagination {
+  currentPage: number;
+  pageSize: number;
+  totalResults: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface SearchMetadata {
+  executionTime: number;
+  searchedPapers: number;
+  threshold: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResult[];
+  pagination: SearchPagination;
+  searchMetadata: SearchMetadata;
+}
