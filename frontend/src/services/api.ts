@@ -87,6 +87,34 @@ export class PapersAPI {
     today.setHours(23, 59, 59, 999);
     return date <= today;
   }
+
+  /**
+   * Search papers by query string with fuzzy matching
+   * @param query - Search query string
+   * @param page - Page number (default: 1)
+   * @param limit - Results per page (default: 10)
+   * @returns Promise<SearchResponse>
+   */
+  static async searchPapers(
+    query: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<SearchResponse> {
+    try {
+      console.log(`🔍 Searching papers: "${query}" (page ${page}, limit ${limit})`);
+
+      const response = await api.get<SearchResponse>('/api/search/papers', {
+        params: { q: query, page, limit }
+      });
+
+      console.log(`✅ Found ${response.data.pagination.totalResults} papers`);
+      return response.data;
+
+    } catch (error) {
+      console.error('❌ Failed to search papers:', error);
+      throw error;
+    }
+  }
 }
 
 export default PapersAPI;
