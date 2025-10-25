@@ -8,6 +8,7 @@ const papersRouter = require('./routes/papers');
 const aiInterpretationRouter = require('./routes/ai-interpretation');
 const qaRouter = require('./routes/qa');
 const searchRouter = require('./routes/search');
+const adminRouter = require('./routes/admin');
 
 // Validate critical environment variables on startup
 if (!process.env.DASHSCOPE_API_KEY) {
@@ -108,6 +109,7 @@ app.use(limiter);
 // Other routes (protected by general limiter)
 app.use('/api/papers', papersRouter);
 app.use('/api/search', searchRouter);
+app.use('/api/admin', adminRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -161,6 +163,10 @@ app.listen(PORT, () => {
   // Run initial cleanup on startup
   pdfHandler.cleanupOldFiles();
   cache.clearOld(48 * 60 * 60 * 1000);
+
+  // Initialize automated paper prefetch cron
+  const cronScheduler = require('./services/cron-scheduler');
+  cronScheduler.init();
 });
 
 module.exports = app;
