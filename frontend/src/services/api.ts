@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ApiResponse, ApiError } from '../types';
+import { ApiResponse, ApiError, SearchResponse } from '../types';
 
 // Create axios instance with base configuration
 // When REACT_APP_API_URL is not set or empty, use relative URLs (via proxy)
