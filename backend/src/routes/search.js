@@ -12,10 +12,11 @@ const searchService = require('../services/search-service');
 const router = express.Router();
 
 // Rate limiter specific to search endpoint
-// 100 requests per 15 minutes (same as general API)
+// Development: 500 requests per 15 minutes (generous for testing)
+// Production: Should be lower based on usage patterns
 const searchLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
+  max: process.env.NODE_ENV === 'production' ? 100 : 500, // More lenient in development
   message: 'Too many search requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import DatePicker from './components/DatePicker';
 import PapersTable from './components/PapersTable';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -74,16 +74,16 @@ function App() {
     }
   };
 
-  const handleSearch = (query: string) => {
+  const handleSearch = useCallback((query: string) => {
     // Clear date-based results when searching
     setPapers([]);
     setLoadingState({ isLoading: false, error: null });
     performSearch(query);
-  };
+  }, [performSearch]);
 
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     clearSearch();
-  };
+  }, [clearSearch]);
 
   const handleRetry = () => {
     if (selectedDate) {
