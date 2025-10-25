@@ -6,7 +6,7 @@
  */
 
 const prisma = require('./prisma');
-const pLimit = require('p-limit');
+const pLimit = require('p-limit').default || require('p-limit');
 
 class PapersCacheService {
   constructor() {
