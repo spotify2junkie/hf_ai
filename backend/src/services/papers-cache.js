@@ -6,6 +6,7 @@
  */
 
 const prisma = require('./prisma');
+const pLimit = require('p-limit');
 
 class PapersCacheService {
   constructor() {
@@ -14,6 +15,10 @@ class PapersCacheService {
 
     // For today's papers, use shorter TTL (1 hour) as they update frequently
     this.TODAY_CACHE_TTL_MS = 60 * 60 * 1000;
+
+    // Limit concurrent database operations to prevent connection pool exhaustion
+    // With connection pool limit of 1, we need to serialize operations
+    this.dbLimit = pLimit(1);
   }
 
   /**
@@ -62,17 +67,20 @@ class PapersCacheService {
       const cacheTtl = isToday ? this.TODAY_CACHE_TTL_MS : this.CACHE_TTL_MS;
       const expiresAt = new Date(Date.now() + cacheTtl);
 
-      // Transform and upsert papers
+      // Transform and upsert papers with controlled concurrency
+      // Each upsert is queued and executed with limited concurrency
       const upsertPromises = papers.map((paper) => {
-        const dbPaper = this.transformPaperToDb(paper, date, expiresAt);
+        return this.dbLimit(() => {
+          const dbPaper = this.transformPaperToDb(paper, date, expiresAt);
 
-        return prisma.paper.upsert({
-          where: { paperId: dbPaper.paperId },
-          update: {
-            ...dbPaper,
-            updatedAt: new Date(),
-          },
-          create: dbPaper,
+          return prisma.paper.upsert({
+            where: { paperId: dbPaper.paperId },
+            update: {
+              ...dbPaper,
+              updatedAt: new Date(),
+            },
+            create: dbPaper,
+          });
         });
       });
 
