@@ -3,6 +3,7 @@ const huggingFaceService = require('../services/huggingface');
 const dashscopeService = require('../services/dashscope');
 const cache = require('../services/cache');
 const papersCache = require('../services/papers-cache');
+const { getConnectionMetrics } = require('../services/prisma');
 
 const router = express.Router();
 
@@ -220,12 +221,48 @@ router.post('/cache/cleanup', async (req, res) => {
 });
 
 /**
+ * GET /api/papers/metrics
+ * Get database connection pool metrics
+ */
+router.get('/metrics', (req, res) => {
+  try {
+    const metrics = getConnectionMetrics();
+
+    res.json({
+      service: 'database-connection-pool',
+      timestamp: new Date().toISOString(),
+      metrics: {
+        queriesExecuted: metrics.queriesExecuted,
+        averageQueryDuration: metrics.averageQueryDuration,
+        totalQueryDuration: metrics.totalQueryDuration,
+        slowQueries: metrics.slowQueries,
+        errors: metrics.errors,
+        lastError: metrics.lastError,
+        uptime: Math.round(metrics.uptime),
+      },
+      health: {
+        status: metrics.errors === 0 ? 'healthy' : 'degraded',
+        slowQueryCount: metrics.slowQueries.length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      service: 'database-connection-pool',
+      timestamp: new Date().toISOString(),
+      error: 'Failed to retrieve metrics',
+      message: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/papers/health
  * Health check for papers service
  */
 router.get('/health', async (req, res) => {
   try {
     const cacheStats = await papersCache.getCacheStats();
+    const connectionMetrics = getConnectionMetrics();
 
     res.json({
       service: 'papers',
@@ -234,14 +271,20 @@ router.get('/health', async (req, res) => {
       cache: {
         enabled: true,
         validPapers: cacheStats.validCachedPapers,
-        totalPapers: cacheStats.totalPapers
+        totalPapers: cacheStats.totalPapers,
+      },
+      database: {
+        queriesExecuted: connectionMetrics.queriesExecuted,
+        averageQueryDuration: connectionMetrics.averageQueryDuration,
+        errors: connectionMetrics.errors,
       },
       endpoints: {
         fetchPapers: 'GET /api/papers?date=YYYY-MM-DD',
         cacheStats: 'GET /api/papers/cache/stats',
+        metrics: 'GET /api/papers/metrics',
         invalidateCache: 'DELETE /api/papers/cache/:date',
-        cleanupCache: 'POST /api/papers/cache/cleanup'
-      }
+        cleanupCache: 'POST /api/papers/cache/cleanup',
+      },
     });
   } catch (error) {
     res.json({
@@ -250,14 +293,15 @@ router.get('/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       cache: {
         enabled: true,
-        status: 'error retrieving stats'
+        status: 'error retrieving stats',
       },
       endpoints: {
         fetchPapers: 'GET /api/papers?date=YYYY-MM-DD',
         cacheStats: 'GET /api/papers/cache/stats',
+        metrics: 'GET /api/papers/metrics',
         invalidateCache: 'DELETE /api/papers/cache/:date',
-        cleanupCache: 'POST /api/papers/cache/cleanup'
-      }
+        cleanupCache: 'POST /api/papers/cache/cleanup',
+      },
     });
   }
 });
