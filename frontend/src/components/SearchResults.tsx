@@ -1,7 +1,8 @@
-import React from 'react';
-import { SearchResponse, SearchResult } from '../types';
+import React, { useState } from 'react';
+import { SearchResponse, SearchResult, Paper } from '../types';
 import PapersTable from './PapersTable';
 import Pagination from './Pagination';
+import AIInterpretationModal from './AIInterpretationModal';
 
 interface SearchResultsProps {
   searchResponse: SearchResponse;
@@ -17,6 +18,13 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   onNext,
 }) => {
   const { query, results, pagination, searchMetadata } = searchResponse;
+  const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleAIInterpretation = (paper: Paper) => {
+    setSelectedPaper(paper);
+    setIsModalOpen(true);
+  };
 
   // Format execution time
   const executionTime = searchMetadata.executionTime < 1
@@ -53,9 +61,16 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   const papers = results.map(({ score, ...paper }) => paper);
 
   return (
-    <div className="bg-white rounded-lg shadow">
-      {/* Header with results count */}
-      <div className="px-6 py-4 border-b border-gray-200">
+    <>
+      <AIInterpretationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        paper={selectedPaper}
+      />
+
+      <div className="bg-white rounded-lg shadow">
+        {/* Header with results count */}
+        <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-medium text-gray-900">
@@ -190,9 +205,16 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                       )}
                     </td>
 
-                    {/* Actions placeholder - could add AI interpretation button */}
+                    {/* Actions - AI Interpretation */}
                     <td className="px-6 py-4">
-                      <span className="text-sm text-gray-400">-</span>
+                      <button
+                        onClick={() => handleAIInterpretation(paper)}
+                        disabled={!paper.pdf_url}
+                        className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        title={paper.pdf_url ? 'AI 解读' : 'No PDF available'}
+                      >
+                        🤖 AI 解读
+                      </button>
                     </td>
                   </tr>
                 );
@@ -211,7 +233,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({
           onNext={onNext}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
