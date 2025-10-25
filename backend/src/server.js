@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const papersRouter = require('./routes/papers');
 const aiInterpretationRouter = require('./routes/ai-interpretation');
 const qaRouter = require('./routes/qa');
+const searchRouter = require('./routes/search');
 
 // Validate critical environment variables on startup
 if (!process.env.DASHSCOPE_API_KEY) {
@@ -106,6 +107,7 @@ app.use(limiter);
 
 // Other routes (protected by general limiter)
 app.use('/api/papers', papersRouter);
+app.use('/api/search', searchRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
