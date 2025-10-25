@@ -22,6 +22,14 @@ class CronScheduler {
       return;
     }
 
+    // Detect Vercel serverless environment
+    const isVercel = process.env.VERCEL === '1';
+    if (isVercel) {
+      console.log('☁️  Vercel serverless detected - using Vercel Cron instead of node-cron');
+      console.log('📝 Configure cron in vercel.json to trigger /api/admin/prefetch/trigger');
+      return;
+    }
+
     // Check if cron is enabled
     const cronEnabled = process.env.CRON_ENABLED !== 'false';
 
