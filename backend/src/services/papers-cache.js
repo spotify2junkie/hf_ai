@@ -17,8 +17,10 @@ class PapersCacheService {
     this.TODAY_CACHE_TTL_MS = 60 * 60 * 1000;
 
     // Limit concurrent database operations to prevent connection pool exhaustion
-    // With connection pool limit of 1, we need to serialize operations
-    this.dbLimit = pLimit(1);
+    // This should be set to match or be slightly lower than your DATABASE_URL connection_limit
+    // Default to 3 concurrent operations, which works well for most cases
+    const concurrencyLimit = parseInt(process.env.DB_CONCURRENCY_LIMIT || '3', 10);
+    this.dbLimit = pLimit(concurrencyLimit);
   }
 
   /**
