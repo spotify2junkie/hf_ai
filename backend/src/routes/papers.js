@@ -69,7 +69,10 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Translate papers synchronously (check cache first, then translate if needed)
+    // Translate papers (check database first, then translate if needed)
+    // Papers from database cache already have abstract_zh if it was translated before
+    const papersNeedingTranslation = [];
+
     const papersWithTranslations = await Promise.all(
       papers.map(async (paper) => {
         // Skip if no abstract
@@ -77,23 +80,37 @@ router.get('/', async (req, res) => {
           return paper;
         }
 
-        // Check cache first
-        const cachedTranslation = await cache.getTranslation(paper.paper_id);
+        // Check if translation exists in database (from cache)
+        if (paper.abstract_zh) {
+          console.log(`✅ DB translation exists for ${paper.paper_id}`);
+          return paper;
+        }
 
+        // Check file cache as fallback
+        const cachedTranslation = await cache.getTranslation(paper.paper_id);
         if (cachedTranslation) {
-          console.log(`✅ Cache hit for ${paper.paper_id}`);
+          console.log(`✅ File cache hit for ${paper.paper_id}`);
+          // Store in database for future use
+          papersCache.updateTranslation(paper.paper_id, cachedTranslation).catch(err => {
+            console.error(`⚠️  Failed to store translation in DB:`, err);
+          });
           return {
             ...paper,
             abstract_zh: cachedTranslation
           };
         }
 
-        // No cache - translate now
+        // No translation - translate now
         try {
           console.log(`🌏 Translating ${paper.paper_id} (${paper.abstract.length} chars)...`);
           const translation = await dashscopeService.translateAbstract(paper.abstract);
 
-          // Cache the translation
+          // Store in database (primary storage)
+          papersCache.updateTranslation(paper.paper_id, translation).catch(err => {
+            console.error(`⚠️  Failed to store translation in DB:`, err);
+          });
+
+          // Also cache in file system as backup
           await cache.setTranslation(paper.paper_id, translation);
           console.log(`✅ Translated and cached ${paper.paper_id}`);
 

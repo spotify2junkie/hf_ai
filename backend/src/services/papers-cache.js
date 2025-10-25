@@ -209,6 +209,68 @@ class PapersCacheService {
   }
 
   /**
+   * Update translation for a specific paper
+   * @param {string} paperId - Paper ID
+   * @param {string} translation - Chinese translation
+   * @returns {Promise<boolean>} Success status
+   */
+  async updateTranslation(paperId, translation) {
+    try {
+      await prisma.paper.update({
+        where: { paperId },
+        data: {
+          abstractZh: translation,
+          updatedAt: new Date(),
+        },
+      });
+
+      console.log(`✅ Updated translation for ${paperId}`);
+      return true;
+    } catch (error) {
+      console.error(`Error updating translation for ${paperId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Batch update translations for multiple papers
+   * @param {Array<{paperId: string, translation: string}>} translations - Array of translations
+   * @returns {Promise<number>} Number of successful updates
+   */
+  async batchUpdateTranslations(translations) {
+    if (!translations || translations.length === 0) {
+      return 0;
+    }
+
+    let successCount = 0;
+
+    // Use dbLimit for concurrency control
+    const updatePromises = translations.map((item) => {
+      return this.dbLimit(async () => {
+        try {
+          await prisma.paper.update({
+            where: { paperId: item.paperId },
+            data: {
+              abstractZh: item.translation,
+              updatedAt: new Date(),
+            },
+          });
+          successCount++;
+          return true;
+        } catch (error) {
+          console.error(`Error updating translation for ${item.paperId}:`, error.message);
+          return false;
+        }
+      });
+    });
+
+    await Promise.all(updatePromises);
+
+    console.log(`✅ Batch updated ${successCount}/${translations.length} translations`);
+    return successCount;
+  }
+
+  /**
    * Get cache statistics
    * @returns {Promise<Object>} Cache statistics
    */
