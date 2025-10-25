@@ -3,8 +3,11 @@ import DatePicker from './components/DatePicker';
 import PapersTable from './components/PapersTable';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
+import SearchBar from './components/SearchBar';
+import SearchResults from './components/SearchResults';
 import { Paper, LoadingState } from './types';
 import PapersAPI from './services/api';
+import { useSearch } from './hooks/useSearch';
 import './App.css';
 
 function App() {
@@ -15,7 +18,25 @@ function App() {
   });
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
+  // Search functionality
+  const {
+    searchResponse,
+    isLoading: isSearching,
+    error: searchError,
+    performSearch,
+    clearSearch,
+    goToPage,
+    nextPage,
+    previousPage,
+  } = useSearch();
+
+  // Track if we're in search mode
+  const isSearchMode = searchResponse !== null || isSearching || searchError !== null;
+
   const handleDateSelect = async (date: Date) => {
+    // Clear search when switching to date mode
+    clearSearch();
+
     setSelectedDate(date);
 
     // Validate date
@@ -53,6 +74,17 @@ function App() {
     }
   };
 
+  const handleSearch = (query: string) => {
+    // Clear date-based results when searching
+    setPapers([]);
+    setLoadingState({ isLoading: false, error: null });
+    performSearch(query);
+  };
+
+  const handleClearSearch = () => {
+    clearSearch();
+  };
+
   const handleRetry = () => {
     if (selectedDate) {
       handleDateSelect(selectedDate);
@@ -78,13 +110,33 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search Bar Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <div className="mb-4">
+            <h2 className="text-lg font-medium text-gray-900 mb-2">
+              Search Papers
+            </h2>
+            <SearchBar
+              onSearch={handleSearch}
+              onClear={handleClearSearch}
+              isLoading={isSearching}
+              disabled={loadingState.isLoading}
+            />
+          </div>
+        </div>
+
         {/* Date Selection */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <DatePicker
-            selectedDate={selectedDate}
-            onDateSelect={handleDateSelect}
-            disabled={loadingState.isLoading}
-          />
+          <div className="mb-4">
+            <h2 className="text-lg font-medium text-gray-900 mb-2">
+              Browse by Date
+            </h2>
+            <DatePicker
+              selectedDate={selectedDate}
+              onDateSelect={handleDateSelect}
+              disabled={loadingState.isLoading || isSearching}
+            />
+          </div>
         </div>
 
         {/* Loading State */}
@@ -94,8 +146,47 @@ function App() {
           </div>
         )}
 
-        {/* Error State */}
-        {loadingState.error && (
+        {/* Search Loading State */}
+        {isSearching && (
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <LoadingSpinner />
+            <p className="text-center text-sm text-gray-600 mt-4">
+              Searching papers...
+            </p>
+          </div>
+        )}
+
+        {/* Search Error State */}
+        {searchError && !isSearching && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-8">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <span className="text-red-400 text-xl">⚠️</span>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-red-800">
+                  Error searching papers
+                </h3>
+                <p className="mt-1 text-sm text-red-700">
+                  {searchError}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Search Results */}
+        {searchResponse && !isSearching && !searchError && (
+          <SearchResults
+            searchResponse={searchResponse}
+            onPageChange={goToPage}
+            onPrevious={previousPage}
+            onNext={nextPage}
+          />
+        )}
+
+        {/* Date-based Error State */}
+        {loadingState.error && !isSearchMode && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-8">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -123,8 +214,8 @@ function App() {
           </div>
         )}
 
-        {/* Results */}
-        {papers.length > 0 && !loadingState.isLoading && (
+        {/* Date-based Results */}
+        {papers.length > 0 && !loadingState.isLoading && !isSearchMode && (
           <div className="bg-white rounded-lg shadow">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-gray-900">
@@ -140,8 +231,8 @@ function App() {
           </div>
         )}
 
-        {/* Empty State */}
-        {papers.length === 0 && !loadingState.isLoading && !loadingState.error && selectedDate && (
+        {/* Date-based Empty State */}
+        {papers.length === 0 && !loadingState.isLoading && !loadingState.error && selectedDate && !isSearchMode && (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <span className="text-6xl mb-4 block">📄</span>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -159,14 +250,14 @@ function App() {
         )}
 
         {/* Welcome State */}
-        {!selectedDate && !loadingState.isLoading && (
+        {!selectedDate && !loadingState.isLoading && !isSearchMode && (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <span className="text-6xl mb-4 block">🔍</span>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Select a date to get started
+              Select a date or search for papers
             </h3>
             <p className="text-gray-600">
-              Choose a date above to fetch academic papers from HuggingFace
+              Use the search bar above to find papers by topics, or choose a date to browse papers from HuggingFace
             </p>
           </div>
         )}
