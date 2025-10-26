@@ -15,7 +15,7 @@
   "crons": [
     {
       "path": "/api/admin/prefetch/trigger",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "env": {
