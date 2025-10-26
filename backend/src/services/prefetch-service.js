@@ -67,7 +67,7 @@ class PrefetchService {
 
       // Fetch papers from HuggingFace
       console.log(`🔄 Fetching from HuggingFace API for ${date}...`);
-      const papers = await huggingFaceService.fetchPapers(date);
+      const papers = await huggingFaceService.fetchDailyPapers(date);
 
       if (!papers || papers.length === 0) {
         console.log(`⚠️  No papers found for ${date}`);
