@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:nextjs\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm start",
-    "dev:no-restart": "concurrently \"npm run start:backend\" \"npm run dev:frontend\"",
+    "dev:nextjs": "cd nextjs-frontend && npm run dev",
+    "dev:no-restart": "concurrently \"npm run start:backend\" \"npm run dev:nextjs\"",
     "start:backend": "cd backend && node src/server.js",
-    "vercel-build": "cd backend && npm install && npx prisma generate"
+    "build": "cd nextjs-frontend && npm install && npm run build",
+    "build:backend": "cd backend && npm install && npx prisma generate",
+    "vercel-build": "npm run build",
+    "start": "cd nextjs-frontend && npm start"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

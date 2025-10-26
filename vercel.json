@@ -1,13 +1,11 @@
 {
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/backend/src/server.js"
-    }
-  ],
+  "buildCommand": "cd nextjs-frontend && npm install && npm run build",
+  "outputDirectory": "nextjs-frontend/.next",
+  "framework": "nextjs",
+  "installCommand": "cd nextjs-frontend && npm install",
   "crons": [
     {
-      "path": "/api/admin/prefetch/trigger",
+      "path": "/api/cron/prefetch",
       "schedule": "0 0 * * *"
     }
   ],

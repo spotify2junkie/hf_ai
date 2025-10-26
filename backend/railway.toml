@@ -1,0 +1,20 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npx prisma generate"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+# Environment variables should be set in Railway dashboard
+# Required variables:
+# - DATABASE_URL
+# - DIRECT_URL
+# - DASHSCOPE_API_KEY
+# - HUGGINGFACE_API_URL
+# - FRONTEND_URL
+# - NODE_ENV=production
