@@ -60,14 +60,10 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // In development, allow requests with no origin (curl, Postman, etc.)
-    // In production, require origin header for security
+    // Allow requests with no origin (health checks, curl, Postman, etc.)
+    // Railway health checks and monitoring tools don't send Origin headers
     if (!origin) {
-      if (process.env.NODE_ENV === 'production') {
-        console.warn(`⚠️  CORS blocked request with no origin header`);
-        return callback(new Error('Origin header required'));
-      }
-      return callback(null, true); // Allow in development only
+      return callback(null, true);
     }
 
     if (allowedOrigins.includes(origin)) {
