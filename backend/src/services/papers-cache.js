@@ -209,6 +209,36 @@ class PapersCacheService {
   }
 
   /**
+   * Retry a database operation with exponential backoff
+   * @param {Function} operation - Async operation to retry
+   * @param {number} maxRetries - Maximum retry attempts
+   * @returns {Promise<any>} Operation result
+   */
+  async retryWithBackoff(operation, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        const isConnectionError =
+          error.code === 'P1001' || // Can't reach database
+          error.code === 'P1017' || // Server closed connection
+          error.message?.includes("Can't reach database") ||
+          error.message?.includes('Connection refused');
+
+        if (!isConnectionError || attempt === maxRetries) {
+          throw error;
+        }
+
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.warn(
+          `Database connection failed (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  /**
    * Update translation for a specific paper
    * @param {string} paperId - Paper ID
    * @param {string} translation - Chinese translation
@@ -216,13 +246,15 @@ class PapersCacheService {
    */
   async updateTranslation(paperId, translation) {
     try {
-      const result = await prisma.paper.updateMany({
-        where: { paperId },
-        data: {
-          abstractZh: translation,
-          updatedAt: new Date(),
-        },
-      });
+      const result = await this.retryWithBackoff(() =>
+        prisma.paper.updateMany({
+          where: { paperId },
+          data: {
+            abstractZh: translation,
+            updatedAt: new Date(),
+          },
+        })
+      );
 
       // Mock Prisma or no record found
       if (!result || result.count === 0) {
@@ -232,7 +264,8 @@ class PapersCacheService {
       console.log(`✅ Updated translation for ${paperId}`);
       return true;
     } catch (error) {
-      // Silently fail - database might not be configured
+      // Silently fail - database might not be configured or connection failed
+      console.error(`Failed to update translation for ${paperId}:`, error.message);
       return false;
     }
   }
@@ -262,16 +295,18 @@ class PapersCacheService {
     const batchPromises = batches.map((batch) => {
       return this.dbLimit(async () => {
         try {
-          // Execute all updates in this batch within a single transaction
-          await prisma.$transaction(
-            batch.map((item) =>
-              prisma.paper.updateMany({
-                where: { paperId: item.paperId },
-                data: {
-                  abstractZh: item.translation,
-                  updatedAt: now,
-                },
-              })
+          // Execute all updates in this batch within a single transaction with retry
+          await this.retryWithBackoff(() =>
+            prisma.$transaction(
+              batch.map((item) =>
+                prisma.paper.updateMany({
+                  where: { paperId: item.paperId },
+                  data: {
+                    abstractZh: item.translation,
+                    updatedAt: now,
+                  },
+                })
+              )
             )
           );
 
@@ -280,17 +315,19 @@ class PapersCacheService {
           return batch.length;
         } catch (error) {
           console.error(`Error updating translation batch:`, error.message);
-          // Transaction failed, try individual updates for this batch
+          // Transaction failed after retries, try individual updates for this batch
           let batchSuccessCount = 0;
           for (const item of batch) {
             try {
-              const result = await prisma.paper.updateMany({
-                where: { paperId: item.paperId },
-                data: {
-                  abstractZh: item.translation,
-                  updatedAt: now,
-                },
-              });
+              const result = await this.retryWithBackoff(() =>
+                prisma.paper.updateMany({
+                  where: { paperId: item.paperId },
+                  data: {
+                    abstractZh: item.translation,
+                    updatedAt: now,
+                  },
+                })
+              );
               if (result && result.count > 0) {
                 batchSuccessCount++;
               }
