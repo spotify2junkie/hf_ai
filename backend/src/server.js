@@ -66,6 +66,12 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    // Allow all Vercel deployment URLs (*.vercel.app)
+    // This includes both production and preview deployments
+    if (origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
