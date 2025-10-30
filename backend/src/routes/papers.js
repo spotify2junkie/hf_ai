@@ -132,7 +132,7 @@ router.get('/', async (req, res) => {
       success: true,
       date: date,
       count: papersWithTranslations.length,
-      papers: papersWithTranslations,
+      data: papersWithTranslations, // Changed from 'papers' to 'data' for frontend compatibility
       source: source // 'cache' or 'api'
     });
 
