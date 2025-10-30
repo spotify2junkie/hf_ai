@@ -4,6 +4,9 @@
  * Provides a single instance of PrismaClient throughout the application.
  * Implements best practices for connection management and hot reload support.
  * Includes connection pool monitoring and query performance tracking.
+ *
+ * NOTE: If DATABASE_URL is not configured, a mock Prisma client will be used
+ * and the application will fall back to in-memory caching.
  */
 
 const { PrismaClient } = require('../generated/prisma');
@@ -20,12 +23,46 @@ const connectionMetrics = {
 };
 
 /**
+ * Check if database is configured
+ */
+const isDatabaseConfigured = () => {
+  return !!process.env.DATABASE_URL;
+};
+
+/**
+ * Create a mock Prisma client that returns empty results
+ * This allows the app to run without a database
+ */
+const createMockPrismaClient = () => {
+  console.warn('⚠️  DATABASE_URL not configured - using in-memory cache only');
+  console.warn('   To enable database features, configure DATABASE_URL in Railway');
+  console.warn('   See: docs/supabase-setup-guide.md');
+
+  return {
+    paper: {
+      findMany: async () => [],
+      findUnique: async () => null,
+      create: async () => null,
+      update: async () => null,
+      upsert: async () => null,
+      delete: async () => null,
+    },
+    $connect: async () => {},
+    $disconnect: async () => {},
+    $on: () => {},
+  };
+};
+
+/**
  * PrismaClient is attached to the global object in development
  * to prevent exhausting database connections during hot reloads.
  */
 let prisma;
 
-if (process.env.NODE_ENV === 'production') {
+if (!isDatabaseConfigured()) {
+  // Database not configured - use mock client
+  prisma = createMockPrismaClient();
+} else if (process.env.NODE_ENV === 'production') {
   prisma = new PrismaClient({
     log: [
       { emit: 'event', level: 'query' },
