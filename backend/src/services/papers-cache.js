@@ -216,7 +216,7 @@ class PapersCacheService {
    */
   async updateTranslation(paperId, translation) {
     try {
-      const result = await prisma.paper.update({
+      const result = await prisma.paper.updateMany({
         where: { paperId },
         data: {
           abstractZh: translation,
@@ -224,8 +224,8 @@ class PapersCacheService {
         },
       });
 
-      // Mock Prisma returns null
-      if (!result) {
+      // Mock Prisma or no record found
+      if (!result || result.count === 0) {
         return false;
       }
 
@@ -253,15 +253,19 @@ class PapersCacheService {
     const updatePromises = translations.map((item) => {
       return this.dbLimit(async () => {
         try {
-          await prisma.paper.update({
+          const result = await prisma.paper.updateMany({
             where: { paperId: item.paperId },
             data: {
               abstractZh: item.translation,
               updatedAt: new Date(),
             },
           });
-          successCount++;
-          return true;
+
+          if (result && result.count > 0) {
+            successCount++;
+            return true;
+          }
+          return false;
         } catch (error) {
           console.error(`Error updating translation for ${item.paperId}:`, error.message);
           return false;
