@@ -227,7 +227,19 @@ class PapersCacheService {
       console.log(`✅ Updated translation for ${paperId}`);
       return true;
     } catch (error) {
-      console.error(`Error updating translation for ${paperId}:`, error);
+      // Silently fail if database is not configured (P2025: record not found)
+      // This allows the app to work without a database using in-memory cache
+      if (error.code === 'P2025') {
+        // Only log once to avoid spam
+        if (!this._dbWarningShown) {
+          console.warn('⚠️  Database not configured - translations will not be persisted');
+          this._dbWarningShown = true;
+        }
+        return false;
+      }
+
+      // Log other database errors
+      console.error(`Error updating translation for ${paperId}:`, error.message);
       return false;
     }
   }
