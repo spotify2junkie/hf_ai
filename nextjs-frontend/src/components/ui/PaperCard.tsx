@@ -1,14 +1,40 @@
 'use client'
 
+import { useState } from 'react'
 import { Paper } from '@/types'
 import { formatAuthors, truncateText, extractDomain } from '@/lib/utils'
-import { Calendar, User, ExternalLink, FileText } from 'lucide-react'
+import { Calendar, User, ExternalLink, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface PaperCardProps {
   paper: Paper
 }
 
+// Generate consistent color for a topic/tag based on its name
+const getTagColor = (tag: string): string => {
+  const colors = [
+    'bg-blue-100 text-blue-700 border-blue-200',
+    'bg-green-100 text-green-700 border-green-200',
+    'bg-purple-100 text-purple-700 border-purple-200',
+    'bg-pink-100 text-pink-700 border-pink-200',
+    'bg-yellow-100 text-yellow-700 border-yellow-200',
+    'bg-indigo-100 text-indigo-700 border-indigo-200',
+    'bg-red-100 text-red-700 border-red-200',
+    'bg-teal-100 text-teal-700 border-teal-200',
+    'bg-orange-100 text-orange-700 border-orange-200',
+    'bg-cyan-100 text-cyan-700 border-cyan-200',
+  ]
+
+  // Simple hash function to consistently assign colors
+  let hash = 0
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
 export function PaperCard({ paper }: PaperCardProps) {
+  const [isAbstractExpanded, setIsAbstractExpanded] = useState(false)
+
   const handlePdfClick = () => {
     if (paper.pdf_url) {
       window.open(paper.pdf_url, '_blank', 'noopener,noreferrer')
@@ -50,6 +76,52 @@ export function PaperCard({ paper }: PaperCardProps) {
           <p className="text-foreground/90 leading-relaxed">
             {truncateText(paper.abstract, 300)}
           </p>
+        </div>
+      )}
+
+      {/* Chinese Abstract - Collapsible */}
+      {paper.abstract_zh && (
+        <div className="mb-4">
+          <button
+            onClick={() => setIsAbstractExpanded(!isAbstractExpanded)}
+            className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors mb-2"
+          >
+            {isAbstractExpanded ? (
+              <>
+                <ChevronUp size={16} />
+                <span>隐藏中文摘要</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={16} />
+                <span>显示中文摘要</span>
+              </>
+            )}
+          </button>
+
+          {isAbstractExpanded && (
+            <div className="mt-3 p-4 bg-muted/30 rounded-lg border border-border/50">
+              <p className="text-foreground/90 leading-relaxed text-sm">
+                {paper.abstract_zh}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Topics/Tags */}
+      {paper.topics && paper.topics.length > 0 && (
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-2">
+            {paper.topics.map((topic, index) => (
+              <span
+                key={index}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition-all hover:shadow-sm ${getTagColor(topic)}`}
+              >
+                {topic}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
