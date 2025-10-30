@@ -1,16 +1,14 @@
 import { ApiResponse } from '@/types';
 
-// API configuration - use Next.js API routes for better server-side handling
+// API configuration - points to Railway backend
 const getApiBaseUrl = () => {
-  if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
-  }
-  return process.env.NODE_ENV === 'development'
-    ? 'http://localhost:3002'
-    : window.location.origin;
+  // Always use NEXT_PUBLIC_API_URL if available (for production/Vercel)
+  // Falls back to localhost:3002 for local development
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
+  return apiUrl;
 };
 
-const API_TIMEOUT = 15000; // 15 seconds
+const API_TIMEOUT = 60000; // 60 seconds - Railway backend with translations can take 3-5 seconds, plus network latency
 
 interface FetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
