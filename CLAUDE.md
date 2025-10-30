@@ -61,9 +61,8 @@ Example: `git commit -m "feat: add user authentication"`
 
 Daily Paper Extractor is a full-stack web application for fetching and analyzing academic papers from the HuggingFace daily papers API. The system includes:
 
-1. **React Frontend** (`frontend/`) - Original TypeScript/React implementation
-2. **Next.js Frontend** (`nextjs-frontend/`) - Modern Next.js 15 implementation with App Router
-3. **Node.js Backend** (`backend/`) - Express API server with HuggingFace integration and AI interpretation
+1. **Next.js Frontend** (`nextjs-frontend/`) - Modern Next.js 15 implementation with App Router (deployed on Vercel)
+2. **Node.js Backend** (`backend/`) - Express API server with HuggingFace integration and AI interpretation (deployed on Railway)
 
 ## Architecture
 
@@ -86,33 +85,28 @@ Entry point: `backend/src/server.js` (port 3001)
 - Papers are fetched with validation for date format (YYYY-MM-DD) and no future dates
 - Topics are extracted from `paper.ai_keywords` field in HuggingFace API response
 
-### Frontend Options
+### Frontend (Next.js)
 
-#### React Frontend (`frontend/`)
-- TypeScript + React 18
-- TailwindCSS for styling
-- React Query for data fetching
-- Date picker with react-datepicker
-- Proxy configured to backend on port 3001
-
-**Key Components:**
-- `PapersTable.tsx` - Main table display
-- `AIInterpretationModal.tsx` - Modal for AI analysis with SSE streaming
-- `DatePicker.tsx` - Date selection
-- `MarkdownRenderer.tsx` - Renders AI interpretation results
-
-#### Next.js Frontend (`nextjs-frontend/`)
+**Next.js Frontend** (`nextjs-frontend/`)
 - Next.js 15 with App Router
-- Server-side API routes (`app/api/`)
+- React 19 with Server Components
 - Tailwind CSS v4
 - TypeScript
+- Framer Motion for animations
 - Built-in API caching and optimization
 
 **Structure:**
 - `app/` - Next.js App Router pages and layouts
-- `components/ui/` - Reusable UI components
-- `lib/api/` - API client functions
+- `components/ui/` - Reusable UI components (PaperCard, DatePicker, LoadingSkeleton)
+- `lib/api/` - API client functions with retry logic
 - `types/` - TypeScript type definitions
+
+**Key Features:**
+- Responsive grid layout (1-4 columns based on screen size)
+- Collapsible Chinese abstract translations
+- Colorful topic tags with consistent hashing
+- Client-side caching with localStorage
+- Error boundaries for graceful error handling
 
 ## Development Commands
 
@@ -125,23 +119,24 @@ npm start        # Production start
 npm test         # Run tests
 ```
 
-### React Frontend
-```bash
-cd frontend
-npm install
-npm start        # Start on port 3000
-npm run build    # Production build
-npm test         # Run tests
-```
-
 ### Next.js Frontend
 ```bash
 cd nextjs-frontend
 npm install
-npm run dev      # Start development server
+npm run dev      # Start development server (port 3002)
 npm run build    # Production build
 npm start        # Production start
 npm run lint     # Run ESLint
+```
+
+### Full Stack Development
+```bash
+# From project root - runs both backend and frontend concurrently
+npm run dev
+
+# Services run on:
+# - Backend: http://localhost:3001
+# - Next.js Frontend: http://localhost:3002
 ```
 
 ### Docker Compose
@@ -154,7 +149,7 @@ docker-compose up --build
 
 # Services run on:
 # - Backend: http://localhost:3001
-# - Frontend: http://localhost:3000
+# - Next.js Frontend: http://localhost:3002
 ```
 
 ## Environment Configuration
@@ -167,8 +162,8 @@ Required environment variables (see `.env.example`):
 - `HUGGINGFACE_API_URL` - HuggingFace API base URL
 - `DASHSCOPE_API_KEY` - Alibaba Cloud DashScope API key (for AI interpretation)
 
-**Frontend:**
-- `REACT_APP_API_URL` - Backend API URL (default: http://localhost:3001)
+**Frontend (Next.js):**
+- `NEXT_PUBLIC_API_URL` - Backend API URL (default: http://localhost:3001)
 
 ## Key Data Flow
 

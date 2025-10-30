@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:nextjs\"",
     "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm start",
     "dev:nextjs": "cd nextjs-frontend && npm run dev",
     "dev:no-restart": "concurrently \"npm run start:backend\" \"npm run dev:nextjs\"",
     "start:backend": "cd backend && node src/server.js",

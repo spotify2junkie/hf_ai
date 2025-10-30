@@ -23,25 +23,26 @@ services:
       timeout: 10s
       retries: 3
 
-  # Frontend React Service
-  frontend:
+  # Next.js Frontend Service
+  nextjs-frontend:
     build:
-      context: ./frontend
+      context: ./nextjs-frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3002:3002"
     environment:
-      - REACT_APP_API_URL=http://localhost:3001
-      - CHOKIDAR_USEPOLLING=true
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NODE_ENV=development
     volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
+      - ./nextjs-frontend/src:/app/src
+      - ./nextjs-frontend/public:/app/public
+      - /app/.next
       - /app/node_modules
-    command: npm start
+    command: npm run dev
     depends_on:
       - backend
     restart: unless-stopped
 
 volumes:
   backend_node_modules:
-  frontend_node_modules:
+  nextjs_node_modules:
