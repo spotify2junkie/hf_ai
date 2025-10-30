@@ -239,6 +239,7 @@ class PapersCacheService {
 
   /**
    * Batch update translations for multiple papers
+   * Uses transaction batching to reduce database round-trips and connection overhead
    * @param {Array<{paperId: string, translation: string}>} translations - Array of translations
    * @returns {Promise<number>} Number of successful updates
    */
@@ -247,33 +248,63 @@ class PapersCacheService {
       return 0;
     }
 
-    let successCount = 0;
+    // Split into batches of 20 to balance transaction size vs round-trips
+    const BATCH_SIZE = 20;
+    const batches = [];
+    for (let i = 0; i < translations.length; i += BATCH_SIZE) {
+      batches.push(translations.slice(i, i + BATCH_SIZE));
+    }
 
-    // Use dbLimit for concurrency control
-    const updatePromises = translations.map((item) => {
+    let successCount = 0;
+    const now = new Date();
+
+    // Process batches with concurrency control
+    const batchPromises = batches.map((batch) => {
       return this.dbLimit(async () => {
         try {
-          const result = await prisma.paper.updateMany({
-            where: { paperId: item.paperId },
-            data: {
-              abstractZh: item.translation,
-              updatedAt: new Date(),
-            },
-          });
+          // Execute all updates in this batch within a single transaction
+          await prisma.$transaction(
+            batch.map((item) =>
+              prisma.paper.updateMany({
+                where: { paperId: item.paperId },
+                data: {
+                  abstractZh: item.translation,
+                  updatedAt: now,
+                },
+              })
+            )
+          );
 
-          if (result && result.count > 0) {
-            successCount++;
-            return true;
-          }
-          return false;
+          // All updates in this batch succeeded
+          successCount += batch.length;
+          return batch.length;
         } catch (error) {
-          console.error(`Error updating translation for ${item.paperId}:`, error.message);
-          return false;
+          console.error(`Error updating translation batch:`, error.message);
+          // Transaction failed, try individual updates for this batch
+          let batchSuccessCount = 0;
+          for (const item of batch) {
+            try {
+              const result = await prisma.paper.updateMany({
+                where: { paperId: item.paperId },
+                data: {
+                  abstractZh: item.translation,
+                  updatedAt: now,
+                },
+              });
+              if (result && result.count > 0) {
+                batchSuccessCount++;
+              }
+            } catch (itemError) {
+              console.error(`Error updating translation for ${item.paperId}:`, itemError.message);
+            }
+          }
+          successCount += batchSuccessCount;
+          return batchSuccessCount;
         }
       });
     });
 
-    await Promise.all(updatePromises);
+    await Promise.all(batchPromises);
 
     console.log(`✅ Batch updated ${successCount}/${translations.length} translations`);
     return successCount;
