@@ -42,19 +42,19 @@ export function PaperCard({ paper }: PaperCardProps) {
   }
 
   return (
-    <div className="paper-card p-6 mb-4 bg-card border border-border rounded-lg hover:shadow-lg transition-all duration-200">
+    <div className="paper-card h-full flex flex-col p-5 bg-card border border-border rounded-lg hover:shadow-lg transition-all duration-200">
       {/* Header */}
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-xl font-semibold text-foreground leading-tight pr-4">
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="text-lg font-semibold text-foreground leading-tight pr-2 line-clamp-2">
           {paper.title || 'Untitled Paper'}
         </h3>
         {paper.pdf_url && (
           <button
             onClick={handlePdfClick}
-            className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground text-sm rounded-md hover:bg-primary/90 transition-colors flex-shrink-0"
+            className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-foreground text-xs rounded-md hover:bg-primary/90 transition-colors flex-shrink-0"
             title="View PDF"
           >
-            <FileText size={16} />
+            <FileText size={14} />
             PDF
           </button>
         )}
@@ -63,45 +63,45 @@ export function PaperCard({ paper }: PaperCardProps) {
       {/* Authors */}
       {paper.authors && paper.authors.length > 0 && (
         <div className="flex items-center gap-2 mb-3 text-muted-foreground">
-          <User size={16} />
-          <span className="text-sm">
-            {formatAuthors(paper.authors, 3)}
+          <User size={14} />
+          <span className="text-xs truncate">
+            {formatAuthors(paper.authors, 2)}
           </span>
         </div>
       )}
 
       {/* Abstract */}
       {paper.abstract && (
-        <div className="mb-4">
-          <p className="text-foreground/90 leading-relaxed">
-            {truncateText(paper.abstract, 300)}
+        <div className="mb-3">
+          <p className="text-foreground/80 leading-relaxed text-sm line-clamp-3">
+            {paper.abstract}
           </p>
         </div>
       )}
 
       {/* Chinese Abstract - Collapsible */}
       {paper.abstract_zh && (
-        <div className="mb-4">
+        <div className="mb-3">
           <button
             onClick={() => setIsAbstractExpanded(!isAbstractExpanded)}
-            className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors mb-2"
+            className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors mb-2"
           >
             {isAbstractExpanded ? (
               <>
-                <ChevronUp size={16} />
-                <span>隐藏中文摘要</span>
+                <ChevronUp size={14} />
+                <span>隐藏中文</span>
               </>
             ) : (
               <>
-                <ChevronDown size={16} />
-                <span>显示中文摘要</span>
+                <ChevronDown size={14} />
+                <span>中文摘要</span>
               </>
             )}
           </button>
 
           {isAbstractExpanded && (
-            <div className="mt-3 p-4 bg-muted/30 rounded-lg border border-border/50">
-              <p className="text-foreground/90 leading-relaxed text-sm">
+            <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50">
+              <p className="text-foreground/90 leading-relaxed text-xs">
                 {paper.abstract_zh}
               </p>
             </div>
@@ -111,31 +111,36 @@ export function PaperCard({ paper }: PaperCardProps) {
 
       {/* Topics/Tags */}
       {paper.topics && paper.topics.length > 0 && (
-        <div className="mb-4">
-          <div className="flex flex-wrap gap-2">
-            {paper.topics.map((topic, index) => (
+        <div className="mb-3 flex-grow">
+          <div className="flex flex-wrap gap-1.5">
+            {paper.topics.slice(0, 6).map((topic, index) => (
               <span
                 key={index}
-                className={`px-3 py-1 text-xs font-medium rounded-full border transition-all hover:shadow-sm ${getTagColor(topic)}`}
+                className={`px-2 py-0.5 text-[10px] font-medium rounded-full border transition-all hover:shadow-sm ${getTagColor(topic)}`}
+                title={topic}
               >
-                {topic}
+                {topic.length > 15 ? topic.substring(0, 15) + '...' : topic}
               </span>
             ))}
+            {paper.topics.length > 6 && (
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full border bg-gray-100 text-gray-600 border-gray-200">
+                +{paper.topics.length - 6}
+              </span>
+            )}
           </div>
         </div>
       )}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-border/50">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Calendar size={14} />
-          <span>{paper.published_date || 'Date not available'}</span>
+      {/* Footer - pushed to bottom */}
+      <div className="flex items-center justify-between pt-3 mt-auto border-t border-border/50">
+        <div className="flex items-center gap-1 text-muted-foreground text-xs">
+          <Calendar size={12} />
+          <span className="truncate">{paper.published_date || 'N/A'}</span>
         </div>
 
-        {paper.pdf_url && (
+        {paper.upvotes > 0 && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <ExternalLink size={12} />
-            <span>{extractDomain(paper.pdf_url)}</span>
+            <span>👍 {paper.upvotes}</span>
           </div>
         )}
       </div>
