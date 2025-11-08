@@ -1,21 +1,32 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, Search, AlertCircle, FileText, TrendingUp } from 'lucide-react'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { PaperCard } from '@/components/ui/PaperCard'
 import { PaperListSkeleton } from '@/components/ui/LoadingSkeleton'
-import { fetchPapersWithCache, validateDate } from '@/lib/api/papers'
+import { SearchToggle, SearchMode } from '@/components/ui/SearchToggle'
+import { fetchPapersWithCache, validateDate, searchPapersGlobal } from '@/lib/api/papers'
 import { formatDateForApi, formatDateForDisplay } from '@/lib/utils'
-import { Paper } from '@/types'
+import { Paper, GlobalSearchResult } from '@/types'
 
 export default function Home() {
+  // Date-specific search state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [papers, setPapers] = useState<Paper[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Search state
+  const [searchMode, setSearchMode] = useState<SearchMode>('date')
   const [searchQuery, setSearchQuery] = useState<string>('')
+
+  // Global search state
+  const [globalSearchResults, setGlobalSearchResults] = useState<GlobalSearchResult[]>([])
+  const [globalSearchLoading, setGlobalSearchLoading] = useState<boolean>(false)
+  const [globalSearchError, setGlobalSearchError] = useState<string | null>(null)
+  const [searchStats, setSearchStats] = useState<{ totalResults: number; executionTime: number } | null>(null)
 
   // Filter papers based on search query
   const filteredPapers = papers.filter(paper => {
@@ -62,6 +73,63 @@ export default function Home() {
     fetchPapers(date)
   }
 
+  // Global search handler
+  const performGlobalSearch = useCallback(async (query: string) => {
+    if (!query || query.trim().length < 2) {
+      setGlobalSearchResults([])
+      setSearchStats(null)
+      setGlobalSearchError(null)
+      return
+    }
+
+    setGlobalSearchLoading(true)
+    setGlobalSearchError(null)
+
+    try {
+      const response = await searchPapersGlobal(query, 1, 50) // Fetch top 50 results
+
+      if (response.success) {
+        setGlobalSearchResults(response.results)
+        setSearchStats({
+          totalResults: response.pagination.totalResults,
+          executionTime: response.searchMetadata.executionTime
+        })
+      } else {
+        throw new Error('Search failed')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred'
+      setGlobalSearchError(errorMessage)
+      setGlobalSearchResults([])
+      setSearchStats(null)
+    } finally {
+      setGlobalSearchLoading(false)
+    }
+  }, [])
+
+  // Debounced global search effect
+  useEffect(() => {
+    if (searchMode === 'global' && searchQuery.trim().length >= 2) {
+      const timeoutId = setTimeout(() => {
+        performGlobalSearch(searchQuery)
+      }, 300) // 300ms debounce
+
+      return () => clearTimeout(timeoutId)
+    } else if (searchMode === 'global' && searchQuery.trim().length === 0) {
+      setGlobalSearchResults([])
+      setSearchStats(null)
+    }
+  }, [searchQuery, searchMode, performGlobalSearch])
+
+  // Handle search mode change
+  const handleSearchModeChange = (mode: SearchMode) => {
+    setSearchMode(mode)
+    setSearchQuery('') // Clear search when switching modes
+    setGlobalSearchResults([])
+    setGlobalSearchError(null)
+    setSearchStats(null)
+  }
+
   // Initial fetch on component mount
   useEffect(() => {
     fetchPapers(selectedDate)
@@ -69,7 +137,11 @@ export default function Home() {
   }, [])
 
   const handleRetry = () => {
-    fetchPapers(selectedDate)
+    if (searchMode === 'global' && searchQuery.trim().length >= 2) {
+      performGlobalSearch(searchQuery)
+    } else {
+      fetchPapers(selectedDate)
+    }
   }
 
   return (
@@ -93,14 +165,31 @@ export default function Home() {
 
             {/* Quick Stats */}
             <div className="flex justify-center items-center gap-8 text-sm opacity-80">
-              <div className="flex items-center gap-2">
-                <FileText size={16} />
-                <span>{papers.length} papers today</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar size={16} />
-                <span>{formatDateForDisplay(selectedDate)}</span>
-              </div>
+              {searchMode === 'date' ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} />
+                    <span>{papers.length} papers today</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} />
+                    <span>{formatDateForDisplay(selectedDate)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Search size={16} />
+                    <span>Global Search Mode</span>
+                  </div>
+                  {searchStats && (
+                    <div className="flex items-center gap-2">
+                      <FileText size={16} />
+                      <span>{searchStats.totalResults} results found</span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </motion.div>
         </div>
@@ -129,9 +218,16 @@ export default function Home() {
 
             {/* Search */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-3">
-                Search Papers
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-foreground">
+                  Search Papers
+                </label>
+                <SearchToggle
+                  mode={searchMode}
+                  onModeChange={handleSearchModeChange}
+                  disabled={loading || globalSearchLoading}
+                />
+              </div>
               <div className="relative">
                 <Search
                   size={20}
@@ -139,17 +235,26 @@ export default function Home() {
                 />
                 <input
                   type="text"
-                  placeholder="Search by title, abstract, or author..."
+                  placeholder={
+                    searchMode === 'global'
+                      ? 'Search all papers by title, abstract, topics, authors...'
+                      : 'Filter current date by title, abstract, author...'
+                  }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 />
               </div>
+              {searchMode === 'global' && searchQuery.trim().length > 0 && searchQuery.trim().length < 2 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Type at least 2 characters to search
+                </p>
+              )}
             </div>
           </div>
 
           {/* Results Summary */}
-          {!loading && !error && (
+          {!loading && !globalSearchLoading && !error && !globalSearchError && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -157,12 +262,28 @@ export default function Home() {
             >
               <div className="flex items-center gap-2">
                 <TrendingUp size={16} />
-                <span>
-                  Showing {filteredPapers.length} of {papers.length} papers
-                  {searchQuery && ` for "${searchQuery}"`}
-                </span>
+                {searchMode === 'global' ? (
+                  <span>
+                    {globalSearchResults.length > 0 ? (
+                      <>
+                        Found {searchStats?.totalResults || 0} results
+                        {searchStats?.executionTime && ` in ${searchStats.executionTime}ms`}
+                        {searchQuery && ` for "${searchQuery}"`}
+                      </>
+                    ) : (
+                      <>
+                        {searchQuery.trim().length >= 2 ? 'No results found' : 'Start typing to search all papers'}
+                      </>
+                    )}
+                  </span>
+                ) : (
+                  <span>
+                    Showing {filteredPapers.length} of {papers.length} papers
+                    {searchQuery && ` matching "${searchQuery}"`}
+                  </span>
+                )}
               </div>
-              {papers.length > 0 && (
+              {searchMode === 'date' && papers.length > 0 && (
                 <span className="text-xs">
                   Last updated: {new Date().toLocaleTimeString()}
                 </span>
@@ -173,7 +294,8 @@ export default function Home() {
 
         {/* Papers List */}
         <AnimatePresence mode="wait">
-          {loading && (
+          {/* Loading State */}
+          {(loading || globalSearchLoading) && (
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
@@ -184,7 +306,8 @@ export default function Home() {
             </motion.div>
           )}
 
-          {error && (
+          {/* Error State */}
+          {((searchMode === 'date' && error) || (searchMode === 'global' && globalSearchError)) && (
             <motion.div
               key="error"
               initial={{ opacity: 0, y: 20 }}
@@ -194,9 +317,11 @@ export default function Home() {
             >
               <AlertCircle className="mx-auto mb-4 text-destructive" size={48} />
               <h3 className="text-lg font-medium text-destructive mb-2">
-                Error Loading Papers
+                {searchMode === 'global' ? 'Error Searching Papers' : 'Error Loading Papers'}
               </h3>
-              <p className="text-destructive/80 mb-4">{error}</p>
+              <p className="text-destructive/80 mb-4">
+                {searchMode === 'global' ? globalSearchError : error}
+              </p>
               <button
                 onClick={handleRetry}
                 className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors"
@@ -206,7 +331,8 @@ export default function Home() {
             </motion.div>
           )}
 
-          {!loading && !error && filteredPapers.length === 0 && papers.length === 0 && (
+          {/* Date Mode: No Papers Found */}
+          {searchMode === 'date' && !loading && !error && filteredPapers.length === 0 && papers.length === 0 && (
             <motion.div
               key="no-papers"
               initial={{ opacity: 0, y: 20 }}
@@ -225,7 +351,8 @@ export default function Home() {
             </motion.div>
           )}
 
-          {!loading && !error && filteredPapers.length === 0 && papers.length > 0 && (
+          {/* Date Mode: No Search Results */}
+          {searchMode === 'date' && !loading && !error && filteredPapers.length === 0 && papers.length > 0 && (
             <motion.div
               key="no-search-results"
               initial={{ opacity: 0, y: 20 }}
@@ -235,11 +362,38 @@ export default function Home() {
             >
               <Search className="mx-auto mb-4 text-muted-foreground" size={48} />
               <h3 className="text-lg font-medium text-foreground mb-2">
-                No Search Results
+                No Matching Papers
               </h3>
               <p className="text-muted-foreground">
-                No papers match your search query &ldquo;{searchQuery}&rdquo;.
-                Try different keywords or clear the search.
+                No papers match your filter &ldquo;{searchQuery}&rdquo; on {formatDateForDisplay(selectedDate)}.
+                Try different keywords or clear the filter.
+              </p>
+              <button
+                onClick={() => setSearchQuery('')}
+                className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              >
+                Clear Filter
+              </button>
+            </motion.div>
+          )}
+
+          {/* Global Mode: No Results */}
+          {searchMode === 'global' && !globalSearchLoading && !globalSearchError &&
+           searchQuery.trim().length >= 2 && globalSearchResults.length === 0 && (
+            <motion.div
+              key="no-global-results"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-muted/50 border border-border rounded-lg p-12 text-center"
+            >
+              <Search className="mx-auto mb-4 text-muted-foreground" size={48} />
+              <h3 className="text-lg font-medium text-foreground mb-2">
+                No Papers Found
+              </h3>
+              <p className="text-muted-foreground">
+                No papers match your search &ldquo;{searchQuery}&rdquo; across all cached dates.
+                Try different keywords or check your spelling.
               </p>
               <button
                 onClick={() => setSearchQuery('')}
@@ -250,9 +404,31 @@ export default function Home() {
             </motion.div>
           )}
 
-          {!loading && !error && filteredPapers.length > 0 && (
+          {/* Global Mode: Empty State */}
+          {searchMode === 'global' && !globalSearchLoading && !globalSearchError &&
+           searchQuery.trim().length < 2 && (
             <motion.div
-              key="papers-list"
+              key="global-empty"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-muted/50 border border-border rounded-lg p-12 text-center"
+            >
+              <Search className="mx-auto mb-4 text-muted-foreground" size={48} />
+              <h3 className="text-lg font-medium text-foreground mb-2">
+                Global Search Ready
+              </h3>
+              <p className="text-muted-foreground">
+                Search across all cached papers by title, abstract, topics, or authors.
+                Type at least 2 characters to begin searching.
+              </p>
+            </motion.div>
+          )}
+
+          {/* Date Mode: Show Papers */}
+          {searchMode === 'date' && !loading && !error && filteredPapers.length > 0 && (
+            <motion.div
+              key="date-papers-list"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -266,6 +442,35 @@ export default function Home() {
                   transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.5) }}
                 >
                   <PaperCard paper={paper} />
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+
+          {/* Global Mode: Show Search Results */}
+          {searchMode === 'global' && !globalSearchLoading && !globalSearchError && globalSearchResults.length > 0 && (
+            <motion.div
+              key="global-papers-list"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            >
+              {globalSearchResults.map((paper, index) => (
+                <motion.div
+                  key={paper.paper_id || index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.5) }}
+                >
+                  <PaperCard paper={paper} />
+                  {paper.matchScore && (
+                    <div className="mt-2 text-center">
+                      <span className="text-xs text-muted-foreground">
+                        Relevance: {paper.matchScore}%
+                      </span>
+                    </div>
+                  )}
                 </motion.div>
               ))}
             </motion.div>
