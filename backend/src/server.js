@@ -72,6 +72,12 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    // Allow custom domains pointing to Vercel (hfpaper.dev, etc.)
+    // Match both http and https versions
+    if (origin.includes('hfpaper.dev')) {
+      return callback(null, true);
+    }
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
