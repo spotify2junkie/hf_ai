@@ -2,7 +2,8 @@
  * Search Service
  *
  * Provides fuzzy search functionality for papers using Fuse.js.
- * Searches across topics field with configurable relevance scoring.
+ * Searches across multiple fields: title, abstract (EN/ZH), topics, and authors
+ * with configurable relevance scoring and weighted matching.
  */
 
 const Fuse = require('fuse.js');
@@ -11,23 +12,33 @@ const papersCacheService = require('./papers-cache');
 
 class SearchService {
   constructor() {
-    // Fuse.js configuration for optimal topic matching
+    // Fuse.js configuration for multi-field fuzzy search
+    // Searches across title, abstract (English/Chinese), topics, and authors
     this.fuseOptions = {
-      keys: ['topics'],
-      threshold: 0.3, // 0 = exact match, 1 = match anything
+      keys: [
+        { name: 'title', weight: 0.3 },           // Highest weight - title matches most relevant
+        { name: 'abstract', weight: 0.25 },       // English abstract
+        { name: 'abstract_zh', weight: 0.2 },     // Chinese abstract
+        { name: 'topics', weight: 0.15 },         // Topics/keywords
+        { name: 'authors', weight: 0.1 }          // Author names
+      ],
+      threshold: 0.4, // 0 = exact match, 1 = match anything (slightly more lenient for multi-field)
       includeScore: true, // Include match score in results
       minMatchCharLength: 2, // Minimum characters to match
       ignoreLocation: true, // Don't care where in the string the match is
       distance: 100, // How far from start to search
       useExtendedSearch: false, // Don't need extended search syntax
       findAllMatches: true, // Find all matching tokens
+      maxPatternLength: 32, // Maximum pattern length for performance
+      shouldSort: true, // Sort by relevance score
     };
 
     this.MAX_SEARCH_RESULTS = 100; // Limit to top 100 matches before pagination
   }
 
   /**
-   * Search papers by topics using fuzzy search
+   * Search papers across multiple fields using fuzzy search
+   * Searches: title (30%), abstract (25%), abstract_zh (20%), topics (15%), authors (10%)
    * @param {string} query - Search query
    * @param {number} page - Page number (1-indexed)
    * @param {number} limit - Results per page
