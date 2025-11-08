@@ -47,6 +47,37 @@ export interface PaginationState {
   total: number;
 }
 
+// Global Search Types
+export interface GlobalSearchResult extends Paper {
+  matchScore: number;  // 0-100 score (100 = perfect match)
+  rawScore?: number;   // Original Fuse.js score (0-1)
+}
+
+export interface GlobalSearchPagination {
+  currentPage: number;
+  pageSize: number;
+  totalResults: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface GlobalSearchMetadata {
+  executionTime: number;      // Search execution time in ms
+  searchedPapers: number;      // Total papers searched
+  threshold: number;           // Fuse.js threshold used
+  maxResults: number;          // Maximum results returned
+}
+
+export interface GlobalSearchResponse {
+  success: boolean;
+  query: string;
+  results: GlobalSearchResult[];
+  pagination: GlobalSearchPagination;
+  searchMetadata: GlobalSearchMetadata;
+  searchMode?: 'global' | 'date';  // Optional search mode indicator
+}
+
 // Component prop types
 export interface PaperCardProps {
   paper: Paper;
