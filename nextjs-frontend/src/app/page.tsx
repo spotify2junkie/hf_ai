@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, Search, AlertCircle, FileText, TrendingUp } from 'lucide-react'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { PaperCard } from '@/components/ui/PaperCard'
 import { PaperListSkeleton } from '@/components/ui/LoadingSkeleton'
 import { SearchToggle, SearchMode } from '@/components/ui/SearchToggle'
+import { SortDropdown, SortConfig } from '@/components/ui/SortDropdown'
 import { fetchPapersWithCache, validateDate, searchPapersGlobal } from '@/lib/api/papers'
 import { formatDateForApi, formatDateForDisplay } from '@/lib/utils'
 import { Paper, GlobalSearchResult } from '@/types'
@@ -28,16 +29,48 @@ export default function Home() {
   const [globalSearchError, setGlobalSearchError] = useState<string | null>(null)
   const [searchStats, setSearchStats] = useState<{ totalResults: number; executionTime: number } | null>(null)
 
-  // Filter papers based on search query
-  const filteredPapers = papers.filter(paper => {
-    if (!searchQuery.trim()) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      paper.title?.toLowerCase().includes(query) ||
-      paper.abstract?.toLowerCase().includes(query) ||
-      paper.authors?.some(author => author.toLowerCase().includes(query))
-    )
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    sortBy: 'upvotes',
+    order: 'desc'
   })
+
+  // Sorting function
+  const sortPapers = useCallback(<T extends Paper>(papers: T[]): T[] => {
+    return [...papers].sort((a, b) => {
+      let comparison = 0
+
+      if (sortConfig.sortBy === 'upvotes') {
+        comparison = a.upvotes - b.upvotes
+      } else if (sortConfig.sortBy === 'date') {
+        const dateA = new Date(a.published_date).getTime()
+        const dateB = new Date(b.published_date).getTime()
+        comparison = dateA - dateB
+      }
+
+      return sortConfig.order === 'asc' ? comparison : -comparison
+    })
+  }, [sortConfig])
+
+  // Filter and sort papers based on search query
+  const filteredPapers = useMemo(() => {
+    const filtered = papers.filter(paper => {
+      if (!searchQuery.trim()) return true
+      const query = searchQuery.toLowerCase()
+      return (
+        paper.title?.toLowerCase().includes(query) ||
+        paper.abstract?.toLowerCase().includes(query) ||
+        paper.authors?.some(author => author.toLowerCase().includes(query))
+      )
+    })
+
+    return sortPapers(filtered)
+  }, [papers, searchQuery, sortPapers])
+
+  // Sort global search results
+  const sortedGlobalResults = useMemo(() => {
+    return sortPapers(globalSearchResults)
+  }, [globalSearchResults, sortPapers])
 
   const fetchPapers = async (date: Date) => {
     setLoading(true)
@@ -158,7 +191,7 @@ export default function Home() {
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
               Daily Paper Extractor
             </h1>
-            <p className="text-xl opacity-90 max-w-2xl mx-auto mb-8">
+            <p className="text-xl opacity-90 max-w-4xl mx-auto mb-8 px-6 sm:px-0">
               Discover and explore the latest academic papers from HuggingFace.
               Select any date to view papers published that day.
             </p>
@@ -204,7 +237,7 @@ export default function Home() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="bg-card border border-border rounded-xl p-6 mb-8 shadow-sm"
         >
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Date Picker */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-3">
@@ -251,6 +284,15 @@ export default function Home() {
                 </p>
               )}
             </div>
+
+            {/* Sort Dropdown */}
+            <div>
+              <SortDropdown
+                sortConfig={sortConfig}
+                onSortChange={setSortConfig}
+                disabled={loading || globalSearchLoading}
+              />
+            </div>
           </div>
 
           {/* Results Summary */}
@@ -264,7 +306,7 @@ export default function Home() {
                 <TrendingUp size={16} />
                 {searchMode === 'global' ? (
                   <span>
-                    {globalSearchResults.length > 0 ? (
+                    {sortedGlobalResults.length > 0 ? (
                       <>
                         Found {searchStats?.totalResults || 0} results
                         {searchStats?.executionTime && ` in ${searchStats.executionTime}ms`}
@@ -379,7 +421,7 @@ export default function Home() {
 
           {/* Global Mode: No Results */}
           {searchMode === 'global' && !globalSearchLoading && !globalSearchError &&
-           searchQuery.trim().length >= 2 && globalSearchResults.length === 0 && (
+           searchQuery.trim().length >= 2 && sortedGlobalResults.length === 0 && (
             <motion.div
               key="no-global-results"
               initial={{ opacity: 0, y: 20 }}
@@ -448,7 +490,7 @@ export default function Home() {
           )}
 
           {/* Global Mode: Show Search Results */}
-          {searchMode === 'global' && !globalSearchLoading && !globalSearchError && globalSearchResults.length > 0 && (
+          {searchMode === 'global' && !globalSearchLoading && !globalSearchError && sortedGlobalResults.length > 0 && (
             <motion.div
               key="global-papers-list"
               initial={{ opacity: 0 }}
@@ -456,7 +498,7 @@ export default function Home() {
               exit={{ opacity: 0 }}
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
             >
-              {globalSearchResults.map((paper, index) => (
+              {sortedGlobalResults.map((paper, index) => (
                 <motion.div
                   key={paper.paper_id || index}
                   initial={{ opacity: 0, y: 20 }}
