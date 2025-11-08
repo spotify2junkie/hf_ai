@@ -1,4 +1,4 @@
-import { ApiResponse } from '@/types';
+import { ApiResponse, GlobalSearchResponse } from '@/types';
 
 // API configuration - points to Railway backend
 const getApiBaseUrl = () => {
@@ -139,6 +139,48 @@ export async function fetchPapersWithCache(date: string): Promise<ApiResponse> {
   }
 
   return data;
+}
+
+/**
+ * Global search across all cached papers with fuzzy matching
+ * Searches: title, abstract (EN/ZH), topics, and authors
+ * @param query - Search query string (2-200 characters)
+ * @param page - Page number (default: 1)
+ * @param limit - Results per page (default: 20, max: 50)
+ */
+export async function searchPapersGlobal(
+  query: string,
+  page: number = 1,
+  limit: number = 20
+): Promise<GlobalSearchResponse> {
+  try {
+    if (!query || query.trim().length < 2) {
+      throw new Error('Search query must be at least 2 characters long');
+    }
+
+    if (query.length > 200) {
+      throw new Error('Search query must be at most 200 characters long');
+    }
+
+    const url = `${getApiBaseUrl()}/api/search/global?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`;
+    const response = await fetchWithTimeout(url, { method: 'GET' });
+    const data: GlobalSearchResponse = await response.json();
+
+    // Validate response structure
+    if (!data || typeof data.success === 'undefined') {
+      throw new Error('Invalid response format from server');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('❌ Error searching papers:', error);
+
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    }
+
+    throw new Error('Failed to search papers');
+  }
 }
 
 /**
