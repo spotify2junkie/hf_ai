@@ -7,6 +7,7 @@ import { Calendar, User, ExternalLink, FileText, ChevronDown, ChevronUp } from '
 
 interface PaperCardProps {
   paper: Paper
+  matchScore?: number // Optional relevance score (0-100) for search results
 }
 
 // Generate consistent color for a topic/tag based on its name
@@ -32,7 +33,7 @@ const getTagColor = (tag: string): string => {
   return colors[Math.abs(hash) % colors.length]
 }
 
-export function PaperCard({ paper }: PaperCardProps) {
+export function PaperCard({ paper, matchScore }: PaperCardProps) {
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false)
 
   const handlePdfClick = () => {
@@ -137,6 +138,13 @@ export function PaperCard({ paper }: PaperCardProps) {
           <Calendar size={12} />
           <span className="truncate">{paper.published_date || 'N/A'}</span>
         </div>
+
+        {/* Relevance Score (center) */}
+        {matchScore !== undefined && (
+          <div className="flex items-center gap-1 text-[10px] text-primary/70 font-medium">
+            <span>Match: {matchScore}%</span>
+          </div>
+        )}
 
         {paper.upvotes > 0 && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">

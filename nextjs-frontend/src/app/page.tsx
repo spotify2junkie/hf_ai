@@ -505,14 +505,7 @@ export default function Home() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.5) }}
                 >
-                  <PaperCard paper={paper} />
-                  {paper.matchScore && (
-                    <div className="mt-2 text-center">
-                      <span className="text-xs text-muted-foreground">
-                        Relevance: {paper.matchScore}%
-                      </span>
-                    </div>
-                  )}
+                  <PaperCard paper={paper} matchScore={paper.matchScore} />
                 </motion.div>
               ))}
             </motion.div>
