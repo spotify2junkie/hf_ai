@@ -84,12 +84,6 @@ export default function RootLayout({
                   <Link href="/" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
                     Home
                   </Link>
-                  <a href="/about" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-                    About
-                  </a>
-                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-                    GitHub
-                  </a>
                 </nav>
               </div>
             </div>
