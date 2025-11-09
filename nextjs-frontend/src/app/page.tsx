@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Calendar, Search, AlertCircle, FileText, TrendingUp } from 'lucide-react'
+import { Calendar, Search, AlertCircle, FileText, TrendingUp, Github } from 'lucide-react'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { PaperCard } from '@/components/ui/PaperCard'
 import { PaperListSkeleton } from '@/components/ui/LoadingSkeleton'
@@ -191,10 +191,23 @@ export default function Home() {
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
               Daily Paper Extractor
             </h1>
-            <p className="text-xl opacity-90 max-w-4xl mx-auto mb-8 px-6 sm:px-0">
+            <p className="text-xl opacity-90 max-w-4xl mx-auto mb-6 px-6 sm:px-0">
               Discover and explore the latest academic papers from HuggingFace.
               Select any date to view papers published that day.
             </p>
+
+            {/* GitHub Link */}
+            <div className="mb-8">
+              <a
+                href="https://github.com/spotify2junkie/hf_ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-all duration-200 hover:scale-105 backdrop-blur-sm"
+              >
+                <Github size={18} />
+                <span className="font-medium">View on GitHub</span>
+              </a>
+            </div>
 
             {/* Quick Stats */}
             <div className="flex justify-center items-center gap-8 text-sm opacity-80">
