@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Paper } from '@/types'
 import { formatAuthors, truncateText, extractDomain } from '@/lib/utils'
-import { Calendar, User, ExternalLink, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import { Calendar, User, ExternalLink, FileText, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { AIExplanationModal } from '@/components/AIExplanationModal'
 
 interface PaperCardProps {
   paper: Paper
@@ -35,11 +36,16 @@ const getTagColor = (tag: string): string => {
 
 export function PaperCard({ paper, matchScore }: PaperCardProps) {
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false)
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false)
 
   const handlePdfClick = () => {
     if (paper.pdf_url) {
       window.open(paper.pdf_url, '_blank', 'noopener,noreferrer')
     }
+  }
+
+  const handleAIExplain = () => {
+    setIsAIModalOpen(true)
   }
 
   return (
@@ -49,16 +55,28 @@ export function PaperCard({ paper, matchScore }: PaperCardProps) {
         <h3 className="text-lg font-semibold text-foreground leading-tight pr-2 line-clamp-2">
           {paper.title || 'Untitled Paper'}
         </h3>
-        {paper.pdf_url && (
-          <button
-            onClick={handlePdfClick}
-            className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-foreground text-xs rounded-md hover:bg-primary/90 transition-colors flex-shrink-0"
-            title="View PDF"
-          >
-            <FileText size={14} />
-            PDF
-          </button>
-        )}
+        <div className="flex gap-2 flex-shrink-0">
+          {paper.pdf_url && (
+            <>
+              <button
+                onClick={handleAIExplain}
+                className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-md hover:from-purple-600 hover:to-pink-600 transition-all shadow-sm"
+                title="AI深度解读"
+              >
+                <Sparkles size={14} />
+                AI解读
+              </button>
+              <button
+                onClick={handlePdfClick}
+                className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-foreground text-xs rounded-md hover:bg-primary/90 transition-colors"
+                title="View PDF"
+              >
+                <FileText size={14} />
+                PDF
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Authors */}
@@ -152,6 +170,13 @@ export function PaperCard({ paper, matchScore }: PaperCardProps) {
           </div>
         )}
       </div>
+
+      {/* AI Explanation Modal */}
+      <AIExplanationModal
+        isOpen={isAIModalOpen}
+        onClose={() => setIsAIModalOpen(false)}
+        paper={paper}
+      />
     </div>
   )
 }
