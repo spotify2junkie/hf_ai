@@ -76,12 +76,16 @@ Entry point: `backend/src/server.js` (port 3001)
 
 **Services:**
 - `services/huggingface.js` - Fetches papers from HuggingFace API, extracts metadata (title, authors, abstract, pdf_url, topics from ai_keywords)
-- `services/dashscope.js` - Alibaba Cloud DashScope integration for AI paper interpretation (uses qwen-long model)
+- `services/dashscope.js` - Alibaba Cloud DashScope integration for abstract translation (uses qwen-plus model)
+- `services/siliconflow.js` - SiliconFlow API integration for full paper explanation (uses Qwen/Qwen2.5-7B-Instruct model)
 - `services/pdf-handler.js` - PDF download and temporary file management
 
 **Key Implementation Details:**
+- **Dual AI Service Architecture**:
+  - DashScope (Alibaba Qwen) handles abstract translation
+  - SiliconFlow handles full paper PDF explanation with base64 encoding
 - AI interpretation uses Server-Sent Events (SSE) for streaming responses
-- DashScope service uploads PDF files and streams AI analysis back to client
+- SiliconFlow service converts PDFs to base64 data URLs for API submission
 - Papers are fetched with validation for date format (YYYY-MM-DD) and no future dates
 - Topics are extracted from `paper.ai_keywords` field in HuggingFace API response
 
@@ -97,13 +101,16 @@ Entry point: `backend/src/server.js` (port 3001)
 
 **Structure:**
 - `app/` - Next.js App Router pages and layouts
-- `components/ui/` - Reusable UI components (PaperCard, DatePicker, LoadingSkeleton)
+- `components/ui/` - Reusable UI components (PaperCard, DatePicker, LoadingSkeleton, Modal)
+- `components/` - Feature components (AIExplanationModal)
 - `lib/api/` - API client functions with retry logic
 - `types/` - TypeScript type definitions
 
 **Key Features:**
 - Responsive grid layout (1-4 columns based on screen size)
 - Collapsible Chinese abstract translations
+- **AI Explanation Modal** - Full paper analysis with streaming responses
+- "AI解读" button on each paper card for deep explanations
 - Colorful topic tags with consistent hashing
 - Client-side caching with localStorage
 - Error boundaries for graceful error handling
@@ -160,7 +167,9 @@ Required environment variables (see `.env.example`):
 - `PORT` - Server port (default: 3001)
 - `NODE_ENV` - Environment (development/production)
 - `HUGGINGFACE_API_URL` - HuggingFace API base URL
-- `DASHSCOPE_API_KEY` - Alibaba Cloud DashScope API key (for AI interpretation)
+- `DASHSCOPE_API_KEY` - Alibaba Cloud DashScope API key (for abstract translation)
+- `SILICONFLOW_API_KEY` - SiliconFlow API key (for full paper explanation)
+- `SILICONFLOW_MODEL` - SiliconFlow model name (default: Qwen/Qwen2.5-7B-Instruct)
 
 **Frontend (Next.js):**
 - `NEXT_PUBLIC_API_URL` - Backend API URL (default: http://localhost:3001)
@@ -173,12 +182,24 @@ Required environment variables (see `.env.example`):
    - Backend fetches from HuggingFace API
    - Response includes: title, authors, abstract, pdf_url, topics (from ai_keywords), paper_id, upvotes
 
-2. **AI Interpretation:**
-   - User clicks "AI Interpret" on a paper
-   - Frontend opens SSE connection to `/api/ai-interpretation`
-   - Backend downloads PDF, uploads to DashScope, streams analysis back
+2. **Abstract Translation (DashScope):**
+   - Automatic when papers are fetched without Chinese abstract
+   - Uses DashScope qwen-plus model for translation
+   - Translations cached in database and file system
+   - Displayed in collapsible section on paper cards
+
+3. **Full Paper Explanation (SiliconFlow):**
+   - User clicks "AI解读" button on a paper card
+   - Frontend opens modal and starts POST request to `/api/ai-interpretation`
+   - Backend downloads PDF, converts to base64 data URL
+   - Backend streams analysis from SiliconFlow API using SSE
    - Frontend displays streaming markdown response in modal
-   - Analysis follows structured prompt template in Chinese (core concepts, terminology, methodology, experiments, conclusions)
+   - Analysis follows detailed structured prompt template in Chinese:
+     - 论文核心概念 (core concepts)
+     - 论文内名词解释 (terminology)
+     - 论文方法 (methodology with past problems, framework, and challenges)
+     - 实验结果与分析 (experiments and analysis)
+     - 结论 (contributions, limitations, future directions)
 
 ## Testing Strategy
 
@@ -195,17 +216,26 @@ Required environment variables (see `.env.example`):
 - Topics extracted from `paper.ai_keywords` field
 - PDF URLs constructed as `https://arxiv.org/pdf/{paper_id}.pdf`
 
-**DashScope API:**
-- Base URL: `https://dashscope.aliyuncs.com/compatible-mode/v1`
-- File upload endpoint: `/files`
-- Analysis endpoint: `/chat/completions` with streaming
-- Model: `qwen-long`
-- Analysis prompt is in Chinese and requests detailed paper explanation
+**DashScope API (Abstract Translation):**
+- Base URL: `https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation`
+- Model: `qwen-plus`
+- Used for translating English abstracts to Chinese
+- Non-streaming synchronous requests
+
+**SiliconFlow API (Paper Explanation):**
+- Base URL: `https://api.siliconflow.cn/v1`
+- Endpoint: `/chat/completions` with streaming
+- Model: `Qwen/Qwen2.5-7B-Instruct` (configurable)
+- Accepts PDF as base64 data URL in image_url content type
+- Uses detailed Chinese analysis prompt with structured sections
+- Streaming SSE response for real-time content delivery
 
 ## Security Best Practices
 
 **CRITICAL - Environment Variables:**
-- `DASHSCOPE_API_KEY` is **REQUIRED** - application will throw error if not set
+- `DASHSCOPE_API_KEY` is **REQUIRED** - used for abstract translation
+- `SILICONFLOW_API_KEY` is **REQUIRED** - used for full paper explanation
+- Application will throw error if these keys are not set
 - Never commit `.env` files or hardcode API keys in source code
 - Use `.env.example` as template and create local `.env` file
 
