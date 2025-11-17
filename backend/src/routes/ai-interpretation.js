@@ -2,6 +2,7 @@ const express = require('express');
 const validator = require('validator');
 const pdfHandler = require('../services/pdf-handler');
 const dashscopeService = require('../services/dashscope');
+const siliconflowService = require('../services/siliconflow');
 const cache = require('../services/cache');
 
 const router = express.Router();
@@ -124,20 +125,14 @@ router.post('/', async (req, res) => {
       const downloadDuration = Date.now() - downloadStartTime;
       console.log(`⏱️  PDF Download took: ${downloadDuration}ms (${(downloadDuration/1000).toFixed(2)}s)`);
 
-      // Step 2: Upload to DashScope
-      res.write(`data: ${JSON.stringify({ status: 'uploading' })}\n\n`);
-      const uploadStartTime = Date.now();
-      const fileId = await dashscopeService.uploadPDF(pdfPath);
-      const uploadDuration = Date.now() - uploadStartTime;
-      console.log(`⏱️  PDF Upload to DashScope took: ${uploadDuration}ms (${(uploadDuration/1000).toFixed(2)}s)`);
+      // Step 2: Convert PDF to base64 for SiliconFlow
+      res.write(`data: ${JSON.stringify({ status: 'processing' })}\n\n`);
+      const convertStartTime = Date.now();
+      const pdfBase64DataURL = await siliconflowService.pdfToBase64DataURL(pdfPath);
+      const convertDuration = Date.now() - convertStartTime;
+      console.log(`⏱️  PDF to base64 conversion took: ${convertDuration}ms (${(convertDuration/1000).toFixed(2)}s)`);
 
-      // Cache fileId for Q&A reuse (if paper_id is provided)
-      if (sanitizedPaperId && sanitizedPaperId !== 'Unknown') {
-        await cache.setFileId(sanitizedPaperId, fileId);
-        console.log(`💾 Cached fileId for Q&A: ${fileId}`);
-      }
-
-      // Step 3: Stream analysis
+      // Step 3: Stream analysis with SiliconFlow
       res.write(`data: ${JSON.stringify({ status: 'analyzing' })}\n\n`);
       const analysisStartTime = Date.now();
 
@@ -167,7 +162,7 @@ router.post('/', async (req, res) => {
         return originalWrite(chunk);
       };
 
-      await dashscopeService.streamAnalysis(fileId, res);
+      await siliconflowService.streamAnalysis(pdfBase64DataURL, res);
 
       const totalAnalysisDuration = Date.now() - analysisStartTime;
       console.log(`⏱️  Total Analysis (streaming) took: ${totalAnalysisDuration}ms (${(totalAnalysisDuration/1000).toFixed(2)}s)`);
@@ -184,7 +179,7 @@ router.post('/', async (req, res) => {
       const totalRequestDuration = Date.now() - requestStartTime;
       console.log(`\n📊 TOTAL REQUEST TIME: ${totalRequestDuration}ms (${(totalRequestDuration/1000).toFixed(2)}s)`);
       console.log(`   └─ Download: ${downloadDuration}ms (${((downloadDuration/totalRequestDuration)*100).toFixed(1)}%)`);
-      console.log(`   └─ Upload: ${uploadDuration}ms (${((uploadDuration/totalRequestDuration)*100).toFixed(1)}%)`);
+      console.log(`   └─ Conversion: ${convertDuration}ms (${((convertDuration/totalRequestDuration)*100).toFixed(1)}%)`);
       console.log(`   └─ Analysis: ${totalAnalysisDuration}ms (${((totalAnalysisDuration/totalRequestDuration)*100).toFixed(1)}%)`);
       if (firstChunkTime) {
         const timeToFirstChunk = firstChunkTime - analysisStartTime;
@@ -231,6 +226,7 @@ router.get('/health', (req, res) => {
     service: 'ai-interpretation',
     status: 'OK',
     timestamp: new Date().toISOString(),
+    siliconflow_configured: !!process.env.SILICONFLOW_API_KEY,
     dashscope_configured: !!process.env.DASHSCOPE_API_KEY,
     endpoints: {
       interpret: 'POST /api/ai-interpretation'
