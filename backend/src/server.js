@@ -69,16 +69,19 @@ const corsOptions = {
     // Allow all Vercel deployment URLs (*.vercel.app)
     // This includes both production and preview deployments
     if (origin.endsWith('.vercel.app')) {
+      console.log(`✅ CORS: Allowing Vercel deployment: ${origin}`);
       return callback(null, true);
     }
 
     // Allow custom domains pointing to Vercel (hfpaper.dev, etc.)
     // Match both http and https versions
     if (origin.includes('hfpaper.dev')) {
+      console.log(`✅ CORS: Allowing hfpaper.dev: ${origin}`);
       return callback(null, true);
     }
 
     if (allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS: Allowing configured origin: ${origin}`);
       callback(null, true);
     } else {
       console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
@@ -86,6 +89,8 @@ const corsOptions = {
     }
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   optionsSuccessStatus: 200
 };
 
