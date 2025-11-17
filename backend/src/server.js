@@ -35,8 +35,15 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Skip rate limiting for health check endpoint
-  skip: (req) => req.path === '/health' || req.path === '/api/papers/health' || req.path === '/api/ai-interpretation/health' || req.path === '/api/qa/health',
+  // Skip rate limiting for health check endpoint and OPTIONS preflight requests
+  skip: (req) => {
+    // Always skip OPTIONS requests (CORS preflight)
+    if (req.method === 'OPTIONS') {
+      return true;
+    }
+    // Skip health checks
+    return req.path === '/health' || req.path === '/api/papers/health' || req.path === '/api/ai-interpretation/health' || req.path === '/api/qa/health';
+  },
 });
 
 // Stricter rate limit for AI interpretation (resource intensive)
@@ -48,6 +55,8 @@ const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false, // Count all requests, even failed ones
+  // Skip OPTIONS requests (CORS preflight)
+  skip: (req) => req.method === 'OPTIONS',
 });
 
 // CORS configuration - restrict to known origins
